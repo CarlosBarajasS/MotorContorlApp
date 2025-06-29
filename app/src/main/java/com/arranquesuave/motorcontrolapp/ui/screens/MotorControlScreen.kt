@@ -10,25 +10,38 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExitToApp
+
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxWidth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MotorControlScreen(
-    viewModel: MotorViewModel
+    viewModel: MotorViewModel,
+    onLogout: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateSettings: () -> Unit
 ) {
-    val speed     by viewModel.speed.collectAsState()
-    val status    by viewModel.status.collectAsState()
+
+
     
-    val sliderStates = viewModel.sliders.map { it.collectAsState() }
-    val devices   by viewModel.discoveredDevices.collectAsState()
-    val scanning  by viewModel.isScanning.collectAsState()
-    var showDialog by remember { mutableStateOf(false) }
+    val sliderStates = viewModel.sliders.map { it.collectAsState() } 
+    
+    
+    
 
     Scaffold(
         modifier = Modifier
@@ -36,7 +49,28 @@ fun MotorControlScreen(
             .statusBarsPadding()
             .navigationBarsPadding(),
         topBar = {
-            TopAppBar(title = { Text("Control Motor CD", fontSize = 20.sp) })
+            TopAppBar(
+    title = { Text("Control de Motor", fontSize = 20.sp) },
+    actions = {
+        IconButton(onClick = onLogout) {
+            Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
+        }
+    }
+)
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
+                    selected = true,
+                    onClick = onNavigateHome
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings") },
+                    selected = false,
+                    onClick = onNavigateSettings
+                )
+            }
         }
     ) { inner ->
         val top = inner.calculateTopPadding() + 16.dp
@@ -48,23 +82,29 @@ fun MotorControlScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            item {
-                Text("Velocidad = $speed", style = MaterialTheme.typography.titleLarge)
-            }
+
 
             itemsIndexed(sliderStates) { i, s ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE5F2EC))
                 ) {
                     Column(Modifier.padding(16.dp)) {
-                        Text("Paso ${i+1}: ${s.value}", style = MaterialTheme.typography.bodyLarge)
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Text("PWM ${i+1}", style = MaterialTheme.typography.bodyLarge)
+    Text("${s.value}", style = MaterialTheme.typography.bodyLarge)
+}
                         Spacer(Modifier.height(8.dp))
                         Slider(
                             value = s.value.toFloat(),
                             onValueChange = { viewModel.onSliderChanged(i, it.toInt()) },
                             valueRange = 0f..254f,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = SliderDefaults.colors(
+                                activeTrackColor = Color(0xFF29D07F),
+                                inactiveTrackColor = Color(0xFFE5F2EC),
+                                thumbColor = Color(0xFF29D07F)
+                            )
                         )
                     }
                 }
@@ -72,54 +112,33 @@ fun MotorControlScreen(
             item {
                 Spacer(Modifier.height(16.dp))
                 Button(
-                    onClick = { viewModel.sendContinuo() },
+                    onClick = { viewModel.sendArranque6P() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Yellow)
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF29D07F))
                 ) {
-                    Text("CONTINUO")
+                    Text("Enviar Valores", color = Color.White)
                 }
                 Spacer(Modifier.height(8.dp))
-                Button(onClick = { viewModel.sendArranque6P() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("ARRANQUE 6P")
+                Button(
+                    onClick = { viewModel.sendContinuo() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5F2EC))
+                ) {
+                    Text("Arranque Continuo", color = Color.Black)
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = { viewModel.sendParo() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("PARO")
-                }
-            }
-            item {
-                Spacer(Modifier.height(24.dp))
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                    Text("Estado: $status", style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(8.dp))
-                    Button(
-                        onClick = {
-                            viewModel.startDiscovery()
-                            showDialog = true
-                        },
-                        modifier = Modifier.fillMaxWidth(0.8f)
-                    ) {
-                        Text("Conectar Bluetooth")
-                    }
+                    Text("Paro de Emergencia", color = MaterialTheme.colorScheme.onError)
                 }
             }
         }
 
-        if (showDialog) {
-            BluetoothDeviceDialog(
-                devices = devices,
-                scanning = scanning,
-                onSelect = { dev ->
-                    viewModel.connectDevice(dev)
-                    showDialog = false
-                },
-                onDismiss = { showDialog = false },
-                onScanAgain = { viewModel.startDiscovery() }
-            )
         }
     }
-}

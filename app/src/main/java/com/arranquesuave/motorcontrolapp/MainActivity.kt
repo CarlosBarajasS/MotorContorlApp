@@ -15,12 +15,24 @@ import androidx.core.content.ContextCompat
 import com.arranquesuave.motorcontrolapp.ui.theme.MotorControlAppTheme
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
+import androidx.navigation.NavType
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.arranquesuave.motorcontrolapp.viewmodel.AuthViewModel
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import com.arranquesuave.motorcontrolapp.ui.screens.VerificationScreen
+import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import com.arranquesuave.motorcontrolapp.ui.screens.LoginScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.SignUpScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
+import com.arranquesuave.motorcontrolapp.utils.SessionManager
 
 class MainActivity : ComponentActivity() {
 
@@ -46,35 +58,86 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val sessionManager = SessionManager(this)
+        val startDestination = if (sessionManager.getToken() != null) "control" else "login"
         setContent {
             MotorControlAppTheme {
                 Surface {
-                    // 2) Pasamos el viewModel; la pantalla llamará a startDiscovery()
+                    // 2) Configuración de autenticación y navegación usando AuthViewModel
+        
+                            val authViewModel: AuthViewModel = viewModel()
+                            var signupEmail by remember { mutableStateOf("") }
+val loginResult by authViewModel.loginState.collectAsState(initial = authViewModel.loginState.value)
+val signupResult by authViewModel.signupState.collectAsState(initial = authViewModel.signupState.value)
+        
                     val navController = rememberNavController()
-                    NavHost(navController, startDestination = "login") {
+                    NavHost(navController, startDestination = startDestination) {
                         composable("login") {
-                            LoginScreen(onLogin = { email, password ->
-                                // TODO: Autenticación
-                                navController.navigate("control")
-                            }, onNavigateToSignUp = {
-                                navController.navigate("signup")
-                            })
+                                LoginScreen(onLogin = { email, password ->
+                                    authViewModel.login(email, password)
+                                }, onNavigateToSignUp = {
+                                    navController.navigate("signup")
+                                })
+                                LaunchedEffect(loginResult) {
+                                loginResult?.onSuccess { response -> sessionManager.saveToken(response.token)
+                                navController.navigate("control") {
+                                popUpTo("login") { inclusive = true }
+                                }
+                                    authViewModel.loginState.value = null
+    }
+}
+                            
                         }
                         composable("signup") {
-                            SignUpScreen(onSignUp = { email, password, confirm ->
-                                // TODO: Registro de usuario
-                                navController.popBackStack("login", false)
-                            }, onNavigateToLogin = {
-                                navController.popBackStack()
-                            })
+                                SignUpScreen(onSignUp = { email, password, confirm ->
+                                    signupEmail = email
+                                    authViewModel.signup(email, password, confirm)
+                                }, onNavigateToLogin = {
+                                    navController.popBackStack()
+                                })
+                                LaunchedEffect(signupResult) {
+                                    signupResult?.onSuccess {
+                                        navController.navigate("verify?email=$signupEmail")
+                                    }
+                                }
+                            
                         }
-                        composable("control") {
-                            MotorControlScreen(viewModel)
+                        composable("verify?email={email}",
+                                    arguments = listOf(navArgument("email") { type = NavType.StringType })
+                                ) { backStackEntry ->
+                                    val emailArg = backStackEntry.arguments?.getString("email") ?: ""
+                                    VerificationScreen(email = emailArg, onVerified = {
+                                        navController.navigate("control") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    })
+                                }
+                                composable("control") {
+                            MotorControlScreen(
+    viewModel = viewModel,
+    onLogout = { authViewModel.logout() },
+    onNavigateHome = {},
+    onNavigateSettings = { navController.navigate("bluetooth") }
+)
+val logoutResult by authViewModel.logoutState.collectAsState(initial = authViewModel.logoutState.value)
+LaunchedEffect(logoutResult) {
+    logoutResult?.onSuccess { sessionManager.clearToken()
+        authViewModel.loginState.value = null
+        authViewModel.logoutState.value = null
+        navController.navigate("login") {
+            popUpTo("control") { inclusive = true }
+        }
+    }
+}
                         }
                         composable("bluetooth") {
-                            BluetoothControlScreen(viewModel, onBack = {
-                                navController.popBackStack()
-                            })
+                            BluetoothControlScreen(
+    viewModel = viewModel,
+    onLogout = { authViewModel.logout() },
+    onNavigateHome = { navController.navigate("control") },
+    onNavigateSettings = {}
+)
+                                
                         }
                     }
                 }

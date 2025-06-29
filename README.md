@@ -43,10 +43,12 @@ Desarrollada en Kotlin con Jetpack Compose y corutinas, utilizando arquitectura 
 MotorControlApp/
 ├─ app/
 │  ├─ src/main/java/com/arranquesuave/motorcontrolapp/
-│  │  ├─ ui/screens/*.kt
+│  │  ├─ ui/screens/*.kt  
 │  │  ├─ viewmodel/*.kt
 │  │  ├─ services/BluetoothService.kt
-│  │  └─ utils/Protocol.kt
+│  │  ├─ utils/Protocol.kt
+│  │  ├─ utils/SessionManager.kt
+│  │  ├─ utils/AuthRepository.kt
 │  └─ AndroidManifest.xml
 └─ README.md
 ```
@@ -59,6 +61,23 @@ MotorControlApp/
 5. Pulsar **PARO** para detener inmediatamente.
 
 ## Notas de Desarrollo
+
+### Cambios Recientes
+- **UI Refinements**: En `MotorControlScreen`, la paleta de colores se ajustó para coincidir con el diseño Figma (bots, sliders y contenedores suaves). Se eliminó el texto de velocidad en tiempo real para simplificar la interfaz.
+- **Decodificación de Velocidad**: En `Protocol.kt`, `decodeSpeed` se revirtió al decodificado binario original (first byte - VEL_B) para evitar interferencia de datos ASCII.
+- **Persistencia de Sesión**: Creación de `SessionManager` (`SharedPreferences`) que guarda el token de autenticación.
+- **MainActivity**:
+  - Inicializa `SessionManager` y determina `startDestination` según la sesión.
+  - Guarda `token` al iniciar sesión (Login) y lo limpia al hacer logout.
+- **Estructura y Navegación**: El flujo de pantallas ahora respeta la sesión activa al relanzar la app.
+
+## Capturas
+
+<!-- Inserta aquí capturas de pantalla de la app -->
+
+## Ejemplos de Errores y Soluciones
+
+<!-- Inserta aquí capturas de errores detectados y descripción de la solución -->
 - Agregar fechas y detalles de nuevas funcionalidades.
 - Documentar pruebas en hardware real y lecturas.
 - Registrar errores detectados y pasos de solución.

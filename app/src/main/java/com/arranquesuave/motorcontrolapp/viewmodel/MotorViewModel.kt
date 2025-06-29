@@ -18,6 +18,8 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     private val service = BluetoothService(application)
 
     private val _discovered  = MutableStateFlow<List<BluetoothDevice>>(emptyList())
+    private val _connectedDeviceAddress = MutableStateFlow<String?>(null)
+    val connectedDeviceAddress: StateFlow<String?> = _connectedDeviceAddress
     val discoveredDevices   : StateFlow<List<BluetoothDevice>> = _discovered
 
     private val _isScanning = MutableStateFlow(false)
@@ -66,6 +68,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         _status.value = "Connecting…"
         try {
             service.connect(device)
+            _connectedDeviceAddress.value = device.address
             _status.value = "Connected"
             service.read { data ->
                 // data es texto plano: por ejemplo byteOf(D0+vel)

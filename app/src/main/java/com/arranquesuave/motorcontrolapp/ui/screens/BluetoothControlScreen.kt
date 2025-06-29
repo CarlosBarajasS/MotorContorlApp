@@ -5,10 +5,16 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
+import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -19,21 +25,40 @@ import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 @Composable
 fun BluetoothControlScreen(
     viewModel: MotorViewModel,
-    onBack: () -> Unit
+    onLogout: () -> Unit,
+    onNavigateHome: () -> Unit,
+    onNavigateSettings: () -> Unit
 ) {
     val devices by viewModel.discoveredDevices.collectAsState()
-    var selected by remember { mutableStateOf<String?>(null) }
+    val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
+    var selected by remember { mutableStateOf(connectedAddress) }
+    LaunchedEffect(connectedAddress) { selected = connectedAddress }
+
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Bluetooth Control") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                actions = {
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
                     }
                 }
             )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
+                    selected = false,
+                    onClick = onNavigateHome
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings") },
+                    selected = true,
+                    onClick = onNavigateSettings
+                )
+            }
         }
     ) { inner ->
         Column(
@@ -50,26 +75,38 @@ fun BluetoothControlScreen(
             if (devices.isEmpty()) {
                 Button(
                     onClick = { viewModel.startDiscovery() },
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("Connect")
+                    Text(if (selected == connectedAddress) "Connected" else "Connect", color = MaterialTheme.colorScheme.onPrimary)
                 }
             } else {
                 LazyColumn {
                     items(devices) { dev ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { selected = dev.address }
-                                .padding(8.dp)
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
                         ) {
-                            Icon(Icons.Default.Bluetooth, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text(dev.name ?: dev.address)
-                            if (selected == dev.address) {
-                                Spacer(Modifier.weight(1f))
-                                Icon(Icons.Default.Check, contentDescription = "Selected")
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(12.dp)
+                            ) {
+                                Icon(
+                                    Icons.Filled.Bluetooth,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(dev.name ?: dev.address, style = MaterialTheme.typography.bodyLarge)
+                                if (selected == dev.address) {
+                                    Spacer(Modifier.weight(1f))
+                                    Icon(Icons.Filled.Check, contentDescription = null)
+                                }
                             }
                         }
                     }
@@ -81,10 +118,12 @@ fun BluetoothControlScreen(
                             viewModel.discoveredDevices.value.find { it.address == addr }?.let { viewModel.connectDevice(it) }
                         }
                     },
-                    enabled = selected != null,
-                    modifier = Modifier.fillMaxWidth()
+                    enabled = selected != null && selected != connectedAddress,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("Connect")
+                    Text("Connect", color = MaterialTheme.colorScheme.onPrimary)
                 }
             }
         }

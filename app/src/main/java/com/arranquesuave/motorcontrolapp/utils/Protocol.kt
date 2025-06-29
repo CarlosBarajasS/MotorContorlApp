@@ -35,7 +35,7 @@ object Protocol {
     fun encodeStartRamp(): ByteArray = "0i,".toByteArray(Charsets.UTF_8)
 
     fun decodeSpeed(data: ByteArray): Int? {
-
+        // Decode binary speed packet: first byte = VEL_B + value
         val b = data.firstOrNull() ?: return null
         val diff = (b - VEL_B).toInt()
         return diff.takeIf { it in 0..254 }
