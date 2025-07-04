@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arranquesuave.motorcontrolapp.R
@@ -40,12 +41,14 @@ fun MotorControlScreen(
             painter = painterResource(R.drawable.it_morelia_logo_sinfondo),
             contentDescription = null,
             modifier = Modifier
-                .fillMaxSize()
-                .alpha(0.1f),
-            contentScale = ContentScale.Crop
+                .fillMaxSize(0.75f)
+                .alpha(0.1f)
+                .align(Alignment.Center),
+            contentScale = ContentScale.Fit
         )
 
         Scaffold(
+            containerColor = Color.Transparent,
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
@@ -87,7 +90,7 @@ fun MotorControlScreen(
                 itemsIndexed(sliderStates) { i, s ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE5F2EC))
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE5F2EC).copy(alpha = 0.5f))
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             Row(

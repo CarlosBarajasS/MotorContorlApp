@@ -19,6 +19,10 @@ fun VerificationScreen(
 ) {
     var code by remember { mutableStateOf("") }
 
+    // Observa el resultado de la verificación
+    val verifyResult by viewModel.verifyState.collectAsState()
+
+
 
 
     Column(
@@ -44,8 +48,8 @@ fun VerificationScreen(
         ) {
             Text("Verificar")
         }
-        LaunchedEffect(viewModel.verifyState.value) {
-            viewModel.verifyState.value?.onSuccess {
+                LaunchedEffect(verifyResult) {
+            verifyResult?.onSuccess {
                 onVerified()
             }
         }
