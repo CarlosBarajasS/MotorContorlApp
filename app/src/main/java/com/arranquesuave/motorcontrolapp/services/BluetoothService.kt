@@ -118,4 +118,7 @@ class BluetoothService(private val ctx: Context) {
     fun close() {
         try { socket?.close() } catch (_: IOException) {}
     }
+
+    /** Retorna si el socket está conectado */
+    fun isConnected(): Boolean = socket?.isConnected == true
 }

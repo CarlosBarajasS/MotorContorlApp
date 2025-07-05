@@ -33,6 +33,7 @@ import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import com.arranquesuave.motorcontrolapp.utils.SessionManager
+import com.arranquesuave.motorcontrolapp.BuildConfig
 
 class MainActivity : ComponentActivity() {
 
@@ -59,7 +60,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionManager = SessionManager(this)
-        val startDestination = if (sessionManager.getToken() != null) "control" else "login"
+        val startDestination = if (BuildConfig.NO_AUTH) "control" else if (sessionManager.getToken() != null) "control" else "login"
         setContent {
             MotorControlAppTheme {
                 Surface {

@@ -17,6 +17,18 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    flavorDimensions("mode")
+    productFlavors {
+        create("demo") {
+                applicationIdSuffix = ".demo"
+            dimension = "mode"
+            buildConfigField("boolean", "NO_AUTH", "true")
+        }
+        create("prod") {
+            dimension = "mode"
+            buildConfigField("boolean", "NO_AUTH", "false")
+        }
+    }
     buildTypes {
         release {
             isMinifyEnabled  = false
@@ -37,6 +49,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

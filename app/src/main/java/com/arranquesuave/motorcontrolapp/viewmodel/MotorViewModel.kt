@@ -123,6 +123,15 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         sliders.getOrNull(index)?.value = v.coerceIn(0,254)
     }
 
+        /** Desconecta el dispositivo Bluetooth */
+    @SuppressLint("MissingPermission")
+    fun disconnectDevice() = viewModelScope.launch {
+        _status.value = "Desconectando…"
+        service.close()
+        _connectedDeviceAddress.value = null
+        _status.value = "Disconnected"
+    }
+
     override fun onCleared() {
         super.onCleared()
         service.close()

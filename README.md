@@ -30,7 +30,10 @@ Desarrollada en Kotlin con Jetpack Compose y corutinas, utilizando arquitectura 
 | 2025-06-22  | Primer arranque suave con CSV combinado (encodeArranqueSuave). |
 | 2025-06-23  | Depuración: envío individual de pasos (`encodeStep`) y retardo. |
 | 2025-06-24  | Corrección de paro de emergencia a ASCII (`encodeParo`).   |
-| 2025-06-25  | Separación de `encodeStartRamp`; ajuste de botones UI; README.
+| 2025-06-25  | Separación de `encodeStartRamp`; ajuste de botones UI; README. |
+| 2025-07-02  | Agregado flavor `demo`/`prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación. |
+| 2025-07-03  | Configurado splash screen con `motor_control_background` para logo desvanecido al iniciar. |
+|
 
 ## Complicaciones y Soluciones
 - **Protocolo incorrecto**: uso inicial de comandos binarios vs ASCII, causando falta de respuesta del MCU. _Solución_: migración a ASCII con sufijos y comas.
@@ -70,10 +73,25 @@ MotorControlApp/
   - Inicializa `SessionManager` y determina `startDestination` según la sesión.
   - Guarda `token` al iniciar sesión (Login) y lo limpia al hacer logout.
 - **Estructura y Navegación**: El flujo de pantallas ahora respeta la sesión activa al relanzar la app.
+- **Demo Flavor**: Agregados flavors `demo` y `prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación.
+- **Splash Screen**: Implementado windowBackground con `motor_control_background` para mostrar logo desvanecido durante el arranque.
+- **Reversión de Splash**: Eliminado splash separado; unificado fondo en tema principal.
+- **Pantalla de Control Bluetooth** (`BluetoothControlScreen.kt`):
+    - Muestra estado de conexión y errores en tiempo real.
+    - Añade indicador de progreso (`CircularProgressIndicator`) y botones "Buscar dispositivos" / "Detener búsqueda".
+    - Incluye botón "Buscar nuevamente" para reescanear sin reiniciar la app.
+    - Gestión de cuatro estados: conectado, escaneando, sin dispositivos, listado de dispositivos.
+    - Botón "Desconectar" para cerrar la conexión y limpiar estado.
 
 ## Capturas
 
 <!-- Inserta aquí capturas de pantalla de la app -->
+
+Añade tus capturas en `docs/screenshots/` y referencia aquí:
+
+![Pantalla de Motor Control](docs/screenshots/motor_control.png)
+![Pantalla de Splash](docs/screenshots/splash.png)
+<!-- Otras capturas -->
 
 ## Ejemplos de Errores y Soluciones
 

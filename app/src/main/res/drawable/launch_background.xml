@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fondo blanco u otro color base -->
+    <item android:drawable="@android:color/white"/>
+    <!-- Logo centrado en el splash -->
+    <item>
+        <bitmap
+            android:src="@drawable/it_morelia_logo_sinfondo"
+            android:gravity="center"/>
+    </item>
+</layer-list>
