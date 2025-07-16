@@ -33,6 +33,7 @@ Desarrollada en Kotlin con Jetpack Compose y corutinas, utilizando arquitectura 
 | 2025-06-25  | Separación de `encodeStartRamp`; ajuste de botones UI; README. |
 | 2025-07-02  | Agregado flavor `demo`/`prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación. |
 | 2025-07-03  | Configurado splash screen con `motor_control_background` para logo desvanecido al iniciar. |
+| 2025-07-12  | Restricción de botones de arranque según estado del motor; manejo de BackHandler para navegación y confirmación de salida; actualización de icono de la app. |
 |
 
 ## Complicaciones y Soluciones
@@ -82,6 +83,10 @@ MotorControlApp/
     - Incluye botón "Buscar nuevamente" para reescanear sin reiniciar la app.
     - Gestión de cuatro estados: conectado, escaneando, sin dispositivos, listado de dispositivos.
     - Botón "Desconectar" para cerrar la conexión y limpiar estado.
+
+- **Restricciones de Arranque**: Deshabilita botones de arranque suave/continuo si el motor ya está en ejecución; habilita botón de paro solo cuando el motor esté corriendo.
+- **Manejo de Botón Atrás**: Implementa `BackHandler` en `MainActivity` para navegación entre pantallas Bluetooth, Control, Login y Signup; confirmación de salida con doble pulsación.
+- **Icono de la App**: Cambia el icono de la aplicación por un recurso adaptativo personalizado usando Image Asset Studio.
 
 ## Capturas
 

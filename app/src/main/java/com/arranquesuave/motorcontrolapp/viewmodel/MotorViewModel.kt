@@ -30,6 +30,8 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _status     = MutableStateFlow("Disconnected")
     val status              : StateFlow<String> = _status
+    private val _motorRunning = MutableStateFlow(false)
+    val motorRunning: StateFlow<Boolean> = _motorRunning
 
     val sliders = List(6) { MutableStateFlow(0) }
 
@@ -95,6 +97,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         // Dispara la rampa después de los valores
         
         _status.value = "Arranque suave enviado"
+        _motorRunning.value = true
     }
 
     /** Envía paro en binario */
@@ -104,6 +107,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         val cmd = Protocol.encodeParo()
         service.write(cmd)
         _status.value = "Paro enviado"
+        _motorRunning.value = false
     }
 
     // Control continuo handlers
@@ -117,6 +121,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         val cmd = Protocol.encodeStartRamp()
         service.write(cmd)
         _status.value = "Continuo enviado"
+        _motorRunning.value = true
     }
 
     fun onSliderChanged(index: Int, v: Int) {
@@ -130,6 +135,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         service.close()
         _connectedDeviceAddress.value = null
         _status.value = "Disconnected"
+        _motorRunning.value = false
     }
 
     override fun onCleared() {

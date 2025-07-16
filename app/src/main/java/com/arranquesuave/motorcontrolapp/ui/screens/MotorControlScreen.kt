@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -34,6 +35,7 @@ fun MotorControlScreen(
     onNavigateSettings: () -> Unit
 ) {
     val sliderStates = viewModel.sliders.map { it.collectAsState() }
+    val motorRunning by viewModel.motorRunning.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Logo de fondo desvanecido
@@ -119,6 +121,7 @@ fun MotorControlScreen(
                     Spacer(Modifier.height(16.dp))
                     Button(
                         onClick = { viewModel.sendArranque6P() },
+                        enabled = !motorRunning,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF29D07F))
@@ -128,6 +131,7 @@ fun MotorControlScreen(
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = { viewModel.sendContinuo() },
+                        enabled = !motorRunning,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5F2EC))
@@ -137,6 +141,7 @@ fun MotorControlScreen(
                     Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = { viewModel.sendParo() },
+                        enabled = motorRunning,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)

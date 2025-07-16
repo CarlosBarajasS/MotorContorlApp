@@ -34,6 +34,11 @@ import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import com.arranquesuave.motorcontrolapp.utils.SessionManager
 import com.arranquesuave.motorcontrolapp.BuildConfig
+import androidx.activity.compose.BackHandler
+import androidx.compose.ui.platform.LocalContext
+import androidx.navigation.compose.currentBackStackEntryAsState
+import android.app.Activity
+import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
 
@@ -72,6 +77,28 @@ val loginResult by authViewModel.loginState.collectAsState(initial = authViewMod
 val signupResult by authViewModel.signupState.collectAsState(initial = authViewModel.signupState.value)
         
                     val navController = rememberNavController()
+                    // Back button handling
+                    val backStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = backStackEntry?.destination?.route
+                    val context = LocalContext.current
+                    val activity = context as Activity
+                    var lastBackPressTime by remember { mutableStateOf(0L) }
+                    BackHandler {
+                        when (currentRoute) {
+                            "bluetooth" -> navController.popBackStack()
+                            "control", "login" -> {
+                                val now = System.currentTimeMillis()
+                                if (now - lastBackPressTime < 2000L) {
+                                    activity.finish()
+                                } else {
+                                    lastBackPressTime = now
+                                    Toast.makeText(context, "Presione 2 veces para confirmar la salida", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            "signup" -> navController.navigate("login")
+                            else -> navController.popBackStack()
+                        }
+                    }
                     NavHost(navController, startDestination = startDestination) {
                         composable("login") {
                                 LoginScreen(onLogin = { email, password ->

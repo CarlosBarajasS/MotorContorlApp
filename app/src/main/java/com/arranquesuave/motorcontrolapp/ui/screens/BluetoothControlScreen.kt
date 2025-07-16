@@ -1,5 +1,6 @@
 package com.arranquesuave.motorcontrolapp.ui.screens
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -7,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import androidx.compose.material3.ExperimentalMaterial3Api
 
+@SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BluetoothControlScreen(
@@ -62,7 +64,7 @@ fun BluetoothControlScreen(
                 title = { Text("Bluetooth Control") },
                 actions = {
                     IconButton(onClick = onLogout) {
-                        Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
+                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout")
                     }
                 }
             )
@@ -89,7 +91,7 @@ fun BluetoothControlScreen(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Manage your Bluetooth connection to control the motor.",
+                text = "Maneja la conexion del control de motor.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
@@ -193,7 +195,7 @@ fun BluetoothControlScreen(
                         shape = RoundedCornerShape(24.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {
-                        Text("Connect", color = MaterialTheme.colorScheme.onPrimary)
+                        Text("Conectar", color = MaterialTheme.colorScheme.onPrimary)
                     }
                 }
             }
