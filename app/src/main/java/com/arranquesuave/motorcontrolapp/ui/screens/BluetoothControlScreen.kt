@@ -127,6 +127,54 @@ fun BluetoothControlScreen(
                     ) {
                         Text("Detener búsqueda", color = MaterialTheme.colorScheme.onPrimary)
                     }
+                    // Mostrar dispositivos encontrados durante el escaneo
+                    if (devices.isNotEmpty()) {
+                        Spacer(Modifier.height(16.dp))
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(devices) { dev ->
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { selected = dev.address }
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(12.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Bluetooth,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(dev.name ?: dev.address, style = MaterialTheme.typography.bodyLarge)
+                                        if (selected == dev.address) {
+                                            Spacer(Modifier.weight(1f))
+                                            Icon(Icons.Filled.Check, contentDescription = null)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            onClick = {
+                                selected?.let { addr ->
+                                    viewModel.discoveredDevices.value.find { it.address == addr }
+                                        ?.let { viewModel.connectDevice(it) }
+                                }
+                            },
+                            enabled = selected != null && selected != connectedAddress,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Conectar", color = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    }
                 }
 
                 devices.isEmpty() -> {

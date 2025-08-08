@@ -42,7 +42,8 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
 
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
-        _discovered.value = emptyList()
+        val paired = service.getPairedDevices()
+        _discovered.value = paired
         _isScanning.value = true
         service.startDiscovery(
             onDeviceFound = { dev ->
@@ -56,6 +57,13 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 _isScanning.value = false
             }
         )
+        // Detener escaneo tras 5 segundos para acelerar listado
+        viewModelScope.launch {
+            delay(5000)
+            if (_isScanning.value) {
+                stopDiscovery()
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")

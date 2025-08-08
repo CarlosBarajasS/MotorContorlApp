@@ -34,6 +34,7 @@ Desarrollada en Kotlin con Jetpack Compose y corutinas, utilizando arquitectura 
 | 2025-07-02  | Agregado flavor `demo`/`prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación. |
 | 2025-07-03  | Configurado splash screen con `motor_control_background` para logo desvanecido al iniciar. |
 | 2025-07-12  | Restricción de botones de arranque según estado del motor; manejo de BackHandler para navegación y confirmación de salida; actualización de icono de la app. |
+| 2025-08-08  | Optimización de búsqueda Bluetooth: precarga de dispositivos emparejados, detención automática tras 5 segundos y visualización en tiempo real durante el escaneo. |
 |
 
 ## Complicaciones y Soluciones

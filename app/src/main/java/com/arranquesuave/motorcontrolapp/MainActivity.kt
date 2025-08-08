@@ -33,7 +33,6 @@ import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import com.arranquesuave.motorcontrolapp.utils.SessionManager
-import com.arranquesuave.motorcontrolapp.BuildConfig
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
