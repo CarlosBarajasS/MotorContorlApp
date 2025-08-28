@@ -24,7 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
-import com.arranquesuave.motorcontrolapp.ui.screens.VerificationScreen
+// import com.arranquesuave.motorcontrolapp.ui.screens.VerificationScreen (eliminado)
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import com.arranquesuave.motorcontrolapp.ui.screens.LoginScreen
@@ -72,6 +72,7 @@ class MainActivity : ComponentActivity() {
         
                             val authViewModel: AuthViewModel = viewModel()
                             var signupEmail by remember { mutableStateOf("") }
+                            var signupPassword by remember { mutableStateOf("") }
 val loginResult by authViewModel.loginState.collectAsState(initial = authViewModel.loginState.value)
 val signupResult by authViewModel.signupState.collectAsState(initial = authViewModel.signupState.value)
         
@@ -118,27 +119,51 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
                         composable("signup") {
                                 SignUpScreen(onSignUp = { email, password, confirm ->
                                     signupEmail = email
+                                    signupPassword = password
                                     authViewModel.signup(email, password, confirm)
                                 }, onNavigateToLogin = {
                                     navController.popBackStack()
                                 })
+                                // Manejar el resultado del registro
                                 LaunchedEffect(signupResult) {
-                                    signupResult?.onSuccess {
-                                        navController.navigate("verify?email=$signupEmail")
+                                    signupResult?.onSuccess { response ->
+                                        if (response.isSuccessful) {
+                                            // Ir directamente a la pantalla de control tras registro exitoso
+                                            authViewModel.login(signupEmail, signupPassword)
+                                            Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
+                                            // Reseteamos el estado de signup para evitar bucles
+                                            authViewModel.signupState.value = null
+                                        } else {
+                                            // Mostrar mensaje de error
+                                            Toast.makeText(
+                                                context,
+                                                "Error: La contraseña debe tener al menos 8 caracteres, incluir números, mayúsculas y caracteres especiales",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            // Resetear el estado para no mostrar el error nuevamente
+                                            authViewModel.signupState.value = null
+                                        }
+                                    }
+                                    signupResult?.onFailure { error ->
+                                        Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_LONG).show()
+                                        authViewModel.signupState.value = null
+                                    }
+                                }
+                                
+                                // Manejar resultado del login después del registro
+                                LaunchedEffect(loginResult) {
+                                    loginResult?.onSuccess { response -> 
+                                        // Guardar token y navegar a pantalla principal
+                                        sessionManager.saveToken(response.token)
+                                        navController.navigate("control") {
+                                            popUpTo("signup") { inclusive = true }
+                                        }
+                                        authViewModel.loginState.value = null
                                     }
                                 }
                             
                         }
-                        composable("verify?email={email}",
-                                    arguments = listOf(navArgument("email") { type = NavType.StringType })
-                                ) { backStackEntry ->
-                                    val emailArg = backStackEntry.arguments?.getString("email") ?: ""
-                                    VerificationScreen(email = emailArg, onVerified = {
-                                        navController.navigate("control") {
-                                            popUpTo("login") { inclusive = true }
-                                        }
-                                    })
-                                }
+                        // Pantalla de verificación eliminada
                                 composable("control") {
                             MotorControlScreen(
     viewModel = viewModel,

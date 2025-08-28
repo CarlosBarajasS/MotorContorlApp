@@ -10,7 +10,7 @@ object RetrofitClient {
     private val client = OkHttpClient.Builder().addInterceptor(logging).build()
 
     val authApi: AuthApi = Retrofit.Builder()
-        .baseUrl("http://192.168.100.44:3000")
+        .baseUrl("http://192.168.100.43:3000")
         .client(client)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
