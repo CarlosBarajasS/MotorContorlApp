@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -30,7 +29,6 @@ import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 @Composable
 fun MotorControlScreen(
     viewModel: MotorViewModel,
-    onLogout: () -> Unit,
     onNavigateHome: () -> Unit,
     onNavigateSettings: () -> Unit
 ) {
@@ -57,12 +55,7 @@ fun MotorControlScreen(
                 .navigationBarsPadding(),
             topBar = {
                 TopAppBar(
-                    title = { Text("Control de Motor", fontSize = 20.sp) },
-                    actions = {
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
-                        }
-                    }
+                    title = { Text("Control de Motor", fontSize = 20.sp) }
                 )
             },
             bottomBar = {
@@ -153,5 +146,3 @@ fun MotorControlScreen(
         }
     }
 }
-
-    

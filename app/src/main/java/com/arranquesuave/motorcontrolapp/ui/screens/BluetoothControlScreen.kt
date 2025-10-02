@@ -16,7 +16,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -25,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +42,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 @Composable
 fun BluetoothControlScreen(
     viewModel: MotorViewModel,
-    onLogout: () -> Unit,
     onNavigateHome: () -> Unit,
     onNavigateSettings: () -> Unit
 ) {
@@ -61,12 +58,7 @@ fun BluetoothControlScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Bluetooth Control") },
-                actions = {
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Logout")
-                    }
-                }
+                title = { Text("Bluetooth Control") }
             )
         },
         bottomBar = {

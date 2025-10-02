@@ -6,29 +6,17 @@ plugins {
 
 android {
     namespace   = "com.arranquesuave.motorcontrolapp"
-    compileSdk  = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId             = "com.arranquesuave.motorcontrolapp"
         minSdk                    = 21
-        targetSdk                 = 35
+        targetSdk                 = 36
         versionCode               = 1
         versionName               = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    flavorDimensions("mode")
-    productFlavors {
-        create("demo") {
-                applicationIdSuffix = ".demo"
-            dimension = "mode"
-            buildConfigField("boolean", "NO_AUTH", "true")
-        }
-        create("prod") {
-            dimension = "mode"
-            buildConfigField("boolean", "NO_AUTH", "false")
-        }
-    }
     buildTypes {
         release {
             isMinifyEnabled  = false
@@ -50,7 +38,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 }
 
@@ -72,17 +59,9 @@ dependencies {
 
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.jetbrains.kotlinx.coroutines.android)
-    implementation(libs.androidx.security.crypto)
     implementation(libs.androidx.navigation.compose)
-
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.logging.interceptor)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.navigation.compose.v253)
-
-
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
