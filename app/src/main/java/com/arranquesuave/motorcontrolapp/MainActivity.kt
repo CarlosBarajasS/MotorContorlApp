@@ -31,6 +31,8 @@ import com.arranquesuave.motorcontrolapp.ui.screens.LoginScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.SignUpScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
+import com.arranquesuave.motorcontrolapp.ui.screens.StatsScreen
+import com.arranquesuave.motorcontrolapp.ui.screens.WiFiSetupScreenReal
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import com.arranquesuave.motorcontrolapp.utils.SessionManager
 import androidx.activity.compose.BackHandler
@@ -86,6 +88,7 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
                     BackHandler {
                         when (currentRoute) {
                             "bluetooth" -> navController.popBackStack()
+                            "wifi_setup" -> navController.popBackStack()
                             "control", "login" -> {
                                 val now = System.currentTimeMillis()
                                 if (now - lastBackPressTime < 2000L) {
@@ -169,7 +172,8 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
     viewModel = viewModel,
     onLogout = { authViewModel.logout() },
     onNavigateHome = {},
-    onNavigateSettings = { navController.navigate("bluetooth") }
+    onNavigateSettings = { navController.navigate("bluetooth") },
+    onNavigateToWiFiSetup = { navController.navigate("wifi_setup") } // ✅ NAVEGACIÓN WiFi
 )
 val logoutResult by authViewModel.logoutState.collectAsState(initial = authViewModel.logoutState.value)
 LaunchedEffect(logoutResult) {
@@ -187,9 +191,29 @@ LaunchedEffect(logoutResult) {
     viewModel = viewModel,
     onLogout = { authViewModel.logout() },
     onNavigateHome = { navController.navigate("control") },
-    onNavigateSettings = {}
+    onNavigateSettings = { navController.navigate("stats") }
 )
                                 
+                        }
+                        composable("stats") {
+                            StatsScreen(
+                                viewModel = viewModel,
+                                onNavigateBack = { navController.popBackStack() }
+                            )
+                        }
+                        composable("wifi_setup") {
+                            WiFiSetupScreenReal(
+                                onNavigateBack = { navController.popBackStack() },
+                                onConfigurationComplete = {
+                                    // ✅ CONFIGURACIÓN COMPLETADA
+                                    Toast.makeText(
+                                        context,
+                                        "✅ Configuración WiFi completada exitosamente",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                    navController.popBackStack()
+                                }
+                            )
                         }
                     }
                 }
