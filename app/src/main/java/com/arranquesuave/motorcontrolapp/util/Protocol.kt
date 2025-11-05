@@ -13,12 +13,7 @@ object Protocol {
     fun encodeStep(index: Int, v: Int): ByteArray = "${v.coerceIn(0,254)}${('a'+index)},".toByteArray(Charsets.UTF_8)
     /** Codifica paro en binario: PARO */
     /** Codifica paro ASCII: "0p" */
-    fun encodeParo(): ByteArray = "0p,".toByteArray(Charsets.UTF_8)
-    /** Codifica control continuo ASCII: "<valor>f" */
-    fun encodeContinuo(v: Int): ByteArray {
-        val value = v.coerceIn(0,254)
-        return ("${value}f").toByteArray(Charsets.UTF_8)
-    }
+    fun encodeParo(): ByteArray = "0p".toByteArray(Charsets.UTF_8)
 
 
     /** Codifica arranque suave ASCII: "v0a,v1b,...,v5f" */
@@ -32,7 +27,7 @@ object Protocol {
     }
 
     /** Codifica arranque continuo ASCII: "0i," */
-    fun encodeStartRamp(): ByteArray = "0i,".toByteArray(Charsets.UTF_8)
+    fun encodeStartRamp(): ByteArray = "0i".toByteArray(Charsets.UTF_8)
 
     fun decodeSpeed(data: ByteArray): Int? {
         // Decode binary speed packet: first byte = VEL_B + value

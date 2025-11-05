@@ -20,6 +20,7 @@ import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 @Composable
 fun ConnectionModeSelector(
     currentMode: MotorViewModel.ConnectionMode,
+    localIp: String?,
     onModeChanged: (MotorViewModel.ConnectionMode) -> Unit,
     onNavigateToWiFiSetup: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -56,6 +57,15 @@ fun ConnectionModeSelector(
                 subtitle = "Internet (motor-control-itm.duckdns.org)",
                 selected = currentMode == MotorViewModel.ConnectionMode.MQTT_REMOTE,
                 onClick = { onModeChanged(MotorViewModel.ConnectionMode.MQTT_REMOTE) }
+            )
+
+            // Local WiFi Mode
+            ConnectionModeChip(
+                icon = Icons.Filled.Wifi,
+                title = "WiFi Local",
+                subtitle = localIp?.let { "ESP32 en $it" } ?: "Configura tu ESP32 en la red local",
+                selected = currentMode == MotorViewModel.ConnectionMode.WIFI_LOCAL,
+                onClick = { onModeChanged(MotorViewModel.ConnectionMode.WIFI_LOCAL) }
             )
             
             // WiFi Setup Mode - Para conectarse a red local

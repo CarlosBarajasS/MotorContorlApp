@@ -133,4 +133,19 @@ class WiFiService(private val context: Context) {
             delay(10000) // Actualizar cada 10 segundos
         }
     }
+    
+    /**
+     * ✅ NUEVO: Verifica si el dispositivo está conectado a una red WiFi
+     */
+    fun isConnectedToNetwork(): Boolean {
+        return try {
+            val wifiInfo = wifiManager.connectionInfo
+            val networkId = wifiInfo?.networkId ?: -1
+            
+            // Verificar si está conectado a una red válida
+            networkId != -1 && wifiManager.isWifiEnabled
+        } catch (e: Exception) {
+            false
+        }
+    }
 }

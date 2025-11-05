@@ -206,6 +206,7 @@ LaunchedEffect(logoutResult) {
                                 onNavigateBack = { navController.popBackStack() },
                                 onConfigurationComplete = {
                                     // ✅ CONFIGURACIÓN COMPLETADA
+                                    viewModel.onWiFiSetupCompleted()
                                     Toast.makeText(
                                         context,
                                         "✅ Configuración WiFi completada exitosamente",

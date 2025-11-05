@@ -74,7 +74,7 @@ class NetworkConfigManagerUpdated(private val context: Context) {
      * Configura automáticamente las IPs después de configurar WiFi en ESP32
      */
     suspend fun autoConfigureNetwork(): Boolean {
-        val esp32ConfigService = ESP32ConfigService()
+        val esp32ConfigService = ESP32ConfigService(context)
         
         // 1. Intentar obtener la nueva IP del ESP32
         val esp32IP = esp32ConfigService.getNewIP()

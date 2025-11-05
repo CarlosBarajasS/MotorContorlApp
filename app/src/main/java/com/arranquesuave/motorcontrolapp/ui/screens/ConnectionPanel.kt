@@ -15,12 +15,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arranquesuave.motorcontrolapp.network.ESP32Status
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 
 @Composable
 fun ConnectionPanel(
     viewModel: MotorViewModel,
     onOpenBluetoothDialog: () -> Unit,
+    esp32Status: ESP32Status?,
+    onRefreshEsp32Status: () -> Unit = {},
     onNavigateToWiFiSetup: () -> Unit = {}, // ✅ NUEVO PARÁMETRO
     modifier: Modifier = Modifier
 ) {
@@ -50,7 +53,9 @@ fun ConnectionPanel(
             StatusCard(
                 status = status,
                 connectedDevice = connectedDeviceAddress,
-                speed = speed
+                speed = speed,
+                esp32Status = esp32Status,
+                isLocalMode = connectionMode == MotorViewModel.ConnectionMode.WIFI_LOCAL
             )
             
             // Botones según el modo
@@ -66,6 +71,22 @@ fun ConnectionPanel(
                 MotorViewModel.ConnectionMode.WIFI_LOCAL,
                 MotorViewModel.ConnectionMode.MQTT_REMOTE,
                 MotorViewModel.ConnectionMode.MQTT_TEST -> {
+                    if (connectionMode == MotorViewModel.ConnectionMode.WIFI_LOCAL) {
+                        OutlinedButton(
+                            onClick = onRefreshEsp32Status,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Verificar ESP32", fontSize = 12.sp)
+                        }
+                    }
+                    
                     MqttConnectionButtons(
                         connectionMode = connectionMode,
                         onConnect = { viewModel.connectMqtt() },
@@ -118,7 +139,9 @@ fun ConnectionPanel(
 private fun StatusCard(
     status: String,
     connectedDevice: String?,
-    speed: Int
+    speed: Int,
+    esp32Status: ESP32Status?,
+    isLocalMode: Boolean
 ) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.7f)),
@@ -154,6 +177,31 @@ private fun StatusCard(
                 )
                 Text(
                     text = "Velocidad: $speed RPM",
+                    fontSize = 12.sp,
+                    color = Color(0xFF4A7C59)
+                )
+            } else if (isLocalMode && esp32Status != null) {
+                val localStatus = esp32Status
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "ESP32: ${localStatus.ip ?: "N/A"}",
+                    fontSize = 12.sp,
+                    color = Color(0xFF4A7C59)
+                )
+                if (!localStatus.deviceName.isNullOrBlank()) {
+                    Text(
+                        text = "ID: ${localStatus.deviceName}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF4A7C59)
+                    )
+                }
+                Text(
+                    text = "SSID: ${localStatus.ssid ?: "Desconocido"}",
+                    fontSize = 12.sp,
+                    color = Color(0xFF4A7C59)
+                )
+                Text(
+                    text = "Señal: ${localStatus.signal ?: 0}%",
                     fontSize = 12.sp,
                     color = Color(0xFF4A7C59)
                 )

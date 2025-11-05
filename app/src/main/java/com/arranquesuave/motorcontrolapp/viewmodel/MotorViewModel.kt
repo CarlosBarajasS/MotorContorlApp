@@ -13,8 +13,12 @@ import com.arranquesuave.motorcontrolapp.services.BluetoothService
 import com.arranquesuave.motorcontrolapp.services.MqttService
 import com.arranquesuave.motorcontrolapp.config.MqttConfig
 import com.arranquesuave.motorcontrolapp.network.RetrofitClient
+import com.arranquesuave.motorcontrolapp.network.NetworkConfigManagerUpdated
+import com.arranquesuave.motorcontrolapp.network.ESP32ConfigService
+import com.arranquesuave.motorcontrolapp.network.ESP32Status
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
@@ -36,7 +40,8 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     // ============================================
     private val bluetoothService = BluetoothService(application)
     private val mqttService = MqttService(application)
-    private val mqttConfig = MqttConfig(application)  // ✅ NUEVO: Configuración dinámica
+    private val networkConfigManager = NetworkConfigManagerUpdated(application)
+    private val esp32ConfigService = ESP32ConfigService(application)
     
     // ✅ INICIALIZAR SERVICIOS
     fun initializeServices() {
@@ -77,6 +82,37 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     // Información de conexión
     private val _currentUrl = MutableStateFlow("")
     val currentUrl: StateFlow<String> = _currentUrl
+
+    private val _localEsp32Ip = MutableStateFlow<String?>(null)
+    val localEsp32Ip: StateFlow<String?> = _localEsp32Ip
+
+    private val _esp32Status = MutableStateFlow<ESP32Status?>(null)
+    val esp32Status: StateFlow<ESP32Status?> = _esp32Status
+    
+    private fun applyDeviceId(deviceId: String?) {
+        if (deviceId != null) {
+            val normalized = MqttConfig.normalizeDeviceId(deviceId)
+            MqttConfig.saveDeviceId(normalized)
+            mqttService.updateDeviceId(normalized)
+        } else {
+            mqttService.updateDeviceId(MqttConfig.getDeviceId())
+        }
+    }
+
+    init {
+        // ✅ INICIALIZAR MqttConfig CON CONTEXTO
+        MqttConfig.init(application)
+        mqttService.updateDeviceId(MqttConfig.getDeviceId())
+        
+        viewModelScope.launch {
+            networkConfigManager.networkConfig.collectLatest { config ->
+                _localEsp32Ip.value = config.esp32IP
+                if (_connectionMode.value == ConnectionMode.WIFI_LOCAL) {
+                    _currentUrl.value = config.esp32IP?.let { "http://$it" } ?: "Sin configurar"
+                }
+            }
+        }
+    }
     
     // ============================================
     // SLIDERS (MANTENER IGUAL)
@@ -99,19 +135,25 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
             _status.value = "Disconnected"
             _connectedDeviceAddress.value = null
             
-            // ✅ CONFIGURACIÓN ACTUALIZADA CON WIFI_LOCAL
+            // ✅ CONFIGURACIÓN ACTUALIZADA CON BROKER DEL PROFESOR
             when(mode) {
                 ConnectionMode.BLUETOOTH -> {
                     _currentUrl.value = "Bluetooth SPP"
                     // No cambiar RetrofitClient para Bluetooth
                 }
                 ConnectionMode.WIFI_LOCAL -> {
-                    val localUrl = mqttConfig.getMqttLocalUrl()
-                    _currentUrl.value = localUrl
+                    val ip = _localEsp32Ip.value
+                    _currentUrl.value = ip?.let { "http://$it" } ?: "Sin configurar"
                     RetrofitClient.setBaseUrl(RetrofitClient.ConnectionMode.LOCAL)
+                    _status.value = if (ip != null) {
+                        "ESP32 listo en $ip. Usa 'Conectar MQTT' para controlar."
+                    } else {
+                        "Sin IP configurada. Ejecuta 'Configurar WiFi'."
+                    }
+                    applyDeviceId(null)
                 }
                 ConnectionMode.MQTT_REMOTE -> {
-                    _currentUrl.value = MqttConfig.MQTT_REMOTE_URL
+                    _currentUrl.value = MqttConfig.MQTT_BROKER_URL
                     RetrofitClient.setBaseUrl(RetrofitClient.ConnectionMode.REMOTE)
                 }
                 ConnectionMode.MQTT_TEST -> {
@@ -131,6 +173,41 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    fun onWiFiSetupCompleted(autoConnect: Boolean = true) {
+        viewModelScope.launch {
+            switchConnectionMode(ConnectionMode.WIFI_LOCAL)
+            applyDeviceId(null)
+            val ip = _localEsp32Ip.value
+            if (ip != null) {
+                _status.value = "✅ ESP32 configurado en $ip"
+                if (autoConnect) {
+                    connectMqtt()
+                }
+            } else {
+                _status.value = "Configuración completada. Sin IP guardada."
+            }
+        }
+    }
+
+    fun refreshEsp32Status() = viewModelScope.launch {
+        val ip = _localEsp32Ip.value
+        if (ip.isNullOrBlank()) {
+            _status.value = "Sin IP guardada. Ejecuta Configurar WiFi."
+            return@launch
+        }
+        
+        _status.value = "Consultando ESP32 en $ip..."
+        val statusResult = esp32ConfigService.getStatus(ip)
+        _esp32Status.value = statusResult
+        applyDeviceId(statusResult?.deviceName)
+        
+        _status.value = if (statusResult != null && statusResult.connected) {
+            "ESP32 conectado a ${statusResult.ssid ?: "red desconocida"}"
+        } else {
+            "ESP32 sin conexión WiFi o fuera de línea"
+        }
+    }
+    
     // ============================================
     // CONECTAR SEGÚN EL MODO
     // ============================================
@@ -144,19 +221,18 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                     BluetoothMotorController(bluetoothService, device)
                 }
                 ConnectionMode.WIFI_LOCAL -> {
-                    // ✅ USAR CONFIGURACIÓN LOCAL DINÁMICA DEL USUARIO
-                    val localUrl = mqttConfig.getMqttLocalUrl()
+                    // ✅ USAR BROKER DEL PROFESOR
                     MqttMotorController(
                         mqttService, 
                         RetrofitClient.authApi,
-                        localUrl
+                        MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_REMOTE -> {
                     MqttMotorController(
                         mqttService,
                         RetrofitClient.authApi, 
-                        MqttConfig.MQTT_REMOTE_URL
+                        MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_TEST -> {
@@ -215,19 +291,18 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         try {
             currentController = when (_connectionMode.value) {
                 ConnectionMode.WIFI_LOCAL -> {
-                    // ✅ USAR CONFIGURACIÓN LOCAL DINÁMICA DEL USUARIO
-                    val localUrl = mqttConfig.getMqttLocalUrl()
+                    // ✅ USAR BROKER DEL PROFESOR
                     MqttMotorController(
                         mqttService, 
                         RetrofitClient.authApi,
-                        localUrl
+                        MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_REMOTE -> {
                     MqttMotorController(
                         mqttService,
                         RetrofitClient.authApi,
-                        MqttConfig.MQTT_REMOTE_URL
+                        MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_TEST -> {
@@ -376,6 +451,9 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         _status.value = "Disconnected"
         _motorRunning.value = false
         _speed.value = 0
+        if (_connectionMode.value == ConnectionMode.WIFI_LOCAL) {
+            _esp32Status.value = null
+        }
     }
     
     // ============================================
@@ -403,11 +481,9 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         return when(_connectionMode.value) {
             ConnectionMode.BLUETOOTH -> "Bluetooth SPP directo"
             ConnectionMode.WIFI_LOCAL -> {
-                // ✅ MOSTRAR CONFIGURACIÓN PERSONALIZADA DEL USUARIO
-                val currentUrl = _currentUrl.value
-                "WiFi Local: $currentUrl"
+                "WiFi/MQTT: ${MqttConfig.MQTT_BROKER_URL}"
             }
-            ConnectionMode.MQTT_REMOTE -> "MQTT Remoto: ${MqttConfig.MQTT_REMOTE_URL}"
+            ConnectionMode.MQTT_REMOTE -> "MQTT Broker: ${MqttConfig.MQTT_BROKER_URL}"
             ConnectionMode.MQTT_TEST -> "MQTT Testing: ${MqttConfig.MQTT_TEST_URL}"
             ConnectionMode.WIFI_SETUP -> "Configuración WiFi del dispositivo"
         }

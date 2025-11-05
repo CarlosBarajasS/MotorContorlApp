@@ -38,6 +38,8 @@ fun ConnectionScreen(
     val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
     val status by viewModel.status.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val localIp by viewModel.localEsp32Ip.collectAsState()
+    val esp32Status by viewModel.esp32Status.collectAsState()
     var selectedDevice by remember { mutableStateOf<String?>(null) }
     var showBluetoothDialog by remember { mutableStateOf(false) }
 
@@ -110,6 +112,7 @@ fun ConnectionScreen(
                 item {
                     ConnectionModeSelector(
                         currentMode = connectionMode,
+                        localIp = localIp,
                         onModeChanged = { viewModel.switchConnectionMode(it) }
                     )
                 }
@@ -118,7 +121,9 @@ fun ConnectionScreen(
                 item {
                     ConnectionPanel(
                         viewModel = viewModel,
-                        onOpenBluetoothDialog = { showBluetoothDialog = true }
+                        onOpenBluetoothDialog = { showBluetoothDialog = true },
+                        esp32Status = esp32Status,
+                        onRefreshEsp32Status = { viewModel.refreshEsp32Status() }
                     )
                 }
                 

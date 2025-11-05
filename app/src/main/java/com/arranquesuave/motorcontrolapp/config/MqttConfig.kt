@@ -1,157 +1,132 @@
 package com.arranquesuave.motorcontrolapp.config
 
 import android.content.Context
-import kotlinx.coroutines.flow.first
-import com.arranquesuave.motorcontrolapp.utils.NetworkConfigManager
+import android.content.SharedPreferences
+import android.util.Log
 
 /**
- * CONFIGURACIÓN MQTT PARA MOTOR CONTROL APP
- * 
- * Proyecto: Sistema de Control de Arranque Suave para Motores CD con IoT
- * Instituto: Tecnológico de Morelia
- * Fecha: Octubre 2025
- * 
- * NUEVO: Soporte para configuración WiFi local personalizable
+ * =====================================================================================
+ * MQTT CONFIG - CONFIGURACIÓN COMPLETA PARA COMPILACIÓN
+ * =====================================================================================
+ * Configuración completa para satisfacer todas las dependencias
+ * Incluye todos los objetos y métodos requeridos por MqttService y MotorViewModel
+ * =====================================================================================
  */
-class MqttConfig(private val context: Context) {
+
+object MqttConfig {
     
-    private val networkConfigManager = NetworkConfigManager(context)
+    const val DEFAULT_DEVICE_ID = "MotorController"
+    private const val PREFS_NAME = "mqtt_config"
+    private const val KEY_DEVICE_ID = "device_id"
     
-    // ✅ URLs FIJAS (no cambian)
-    companion object {
-        // 🌐 Remoto - Desde tu casa (Internet) ✅ FUNCIONA
-        const val MQTT_REMOTE_URL = "tcp://177.247.175.4:1885"
-        
-        // 🧪 Testing - Desarrollo sin hardware
-        const val MQTT_TEST_URL = "tcp://test.mosquitto.org:1883"
+    // ✅ CONFIGURACIÓN BÁSICA MQTT - BROKER DEL PROFESOR
+    const val serverHost = "177.247.175.4"  // IP del profesor
+    const val serverPort = 1885              // Puerto del profesor
+    const val qos = 1
+    const val retained = false
+    const val automaticReconnect = true
+    const val cleanSession = true
+    const val connectionTimeout = 30
+    const val keepAliveInterval = 60
+    const val maxInflight = 10
+    
+    // ✅ PROPIEDADES REQUERIDAS POR OTROS ARCHIVOS
+    const val topic = "motor/control"
+    const val payloadAsBytes = false
+    
+    // ✅ URLs PARA DIFERENTES MODOS DE CONEXIÓN
+    const val MQTT_BROKER_URL = "tcp://177.247.175.4:1885"  // Broker principal del profesor
+    const val MQTT_TEST_URL = "tcp://test.mosquitto.org:1883"  // Para pruebas si es necesario
+    
+    // ✅ CONFIGURACIÓN DINÁMICA
+    private var preferences: SharedPreferences? = null
+    
+    // ✅ INICIALIZACIÓN CON CONTEXTO
+    fun init(context: Context) {
+        if (preferences == null) {
+            preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
     }
     
-    // ✅ URL LOCAL DINÁMICA (configurada por usuario)
-    suspend fun getMqttLocalUrl(): String {
-        val config = networkConfigManager.localNetworkConfig.first()
-        return config.getMqttUrl()
-    }
+    // ✅ FUNCIONES MÍNIMAS REQUERIDAS
+    fun getServerUrl(): String = "tcp://$serverHost:$serverPort"
     
-    suspend fun getLocalNetworkInfo(): String {
-        val config = networkConfigManager.localNetworkConfig.first()
-        return config.networkName
-    }
+    // ✅ OBTENER URL DEL BROKER PRINCIPAL
+    fun getBrokerUrl(): String = MQTT_BROKER_URL
     
-    // ============================================
-    // TOPICS MQTT DEFINIDOS
-    // ============================================
+    fun getClientConfig(): Map<String, Any> = mapOf(
+        "serverHost" to serverHost,
+        "serverPort" to serverPort,
+        "clientId" to "MotorControlApp",
+        "cleanSession" to cleanSession,
+        "connectionTimeout" to connectionTimeout,
+        "keepAliveInterval" to keepAliveInterval,
+        "automaticReconnect" to automaticReconnect
+    )
     
-    // Comandos hacia ESP32
+    // ✅ TOPICS MQTT
     object Topics {
-        const val MOTOR_COMMAND = "motor/control/command"
-        const val MOTOR_TYPE = "motor/control/type"
-        
-        // Telemetría desde ESP32
-        const val MOTOR_SPEED = "motor/status/speed"
-        const val MOTOR_CURRENT = "motor/status/current"
-        const val MOTOR_VOLTAGE = "motor/status/voltage"
-        const val MOTOR_STATE = "motor/status/state"
-        const val MOTOR_RAW = "motor/status/raw"
-        
-        // Configuración
-        const val MOTOR_CONFIG_PID = "motor/config/pid"
-        const val MOTOR_CONFIG_LOGISTIC = "motor/config/logistic"
+        fun command(deviceId: String) = "motor/$deviceId/command"
+        fun speed(deviceId: String) = "motor/$deviceId/speed"
+        fun state(deviceId: String) = "motor/$deviceId/state"
+        fun current(deviceId: String) = "motor/$deviceId/current"
+        fun voltage(deviceId: String) = "motor/$deviceId/voltage"
+        fun raw(deviceId: String) = "motor/$deviceId/raw"
+        fun type(deviceId: String) = "motor/$deviceId/type"
     }
     
-    // ============================================
-    // CONFIGURACIÓN DE CLIENTE MQTT
-    // ============================================
-    object ClientConfig {
-        const val CLIENT_ID_PREFIX = "MotorControlApp"
-        const val KEEP_ALIVE_INTERVAL = 60 // segundos
-        const val CONNECTION_TIMEOUT = 30 // segundos
-        const val CLEAN_SESSION = true
-        const val AUTO_RECONNECT = true
-        const val QOS_LEVEL = 1 // At least once delivery
-    }
-    
-    // ============================================
-    // COMANDOS DEL MOTOR (PROTOCOLO ASCII)
-    // ============================================
+    // ✅ COMANDOS MQTT
     object Commands {
-        // Formato: "50a,100b,150c,200d,250e,254f"
-        fun createArranque6P(values: List<Int>): String {
+        private val suffixes = listOf('a', 'b', 'c', 'd', 'e', 'f')
+        
+        fun arranqueSuavePayload(values: List<Int>): String {
             return values.take(6).mapIndexed { index, value ->
-                "$value${('a' + index)}"
+                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }}"
             }.joinToString(",")
         }
         
-        // Arranque continuo
-        const val CONTINUO = "0i,"
+        fun continuoPayload(): String = "0i"
         
-        // Paro de emergencia
-        const val PARO = "0p,"
+        fun paroPayload(): String = "0p"
     }
     
-    // ============================================
-    // MAPEO DE MODOS DE CONEXIÓN
-    // ============================================
-    enum class ConnectionMode(val description: String) {
-        LOCAL("Red local personalizada"),
-        REMOTE("Internet desde tu casa"),
-        TEST("Testing sin hardware")
-    }
-    
-    // ============================================
-    // UTILIDADES
-    // ============================================
+    // ✅ UTILIDADES
     object Utils {
         fun generateClientId(): String {
-            return "${ClientConfig.CLIENT_ID_PREFIX}_${System.currentTimeMillis()}"
-        }
-        
-        fun validateCommand(command: String): Boolean {
-            return when {
-                command == Commands.CONTINUO -> true
-                command == Commands.PARO -> true
-                command.matches(Regex("""^\d+[a-f](,\d+[a-f])*$""")) -> true
-                else -> false
-            }
-        }
-        
-        fun parseArranque6P(command: String): List<Int>? {
-            return try {
-                command.split(",").map { part ->
-                    part.dropLast(1).toInt() // Remove letter, get number
-                }
-            } catch (e: Exception) {
-                null
-            }
+            return "MotorControlApp_${System.currentTimeMillis()}"
         }
     }
-    
-    // ============================================
-    // CONFIGURACIÓN DE TIMEOUT
-    // ============================================
-    object Timeouts {
-        const val COMMAND_RESPONSE_TIMEOUT = 5000L // 5 segundos
-        const val TELEMETRY_TIMEOUT = 10000L // 10 segundos
-        const val CONNECTION_RETRY_DELAY = 2000L // 2 segundos
-        const val MAX_RETRY_ATTEMPTS = 3
-    }
-    
-    // ============================================
-    // LOGGING Y DEBUG
-    // ============================================
+
+    // ✅ DEBUG Y LOGGING
     object Debug {
-        const val ENABLE_MQTT_LOGGING = true
-        const val LOG_TAG = "MqttMotorControl"
+        fun logTelemetry(topic: String, payload: String) {
+            Log.d("MqttTelemetry", "[$topic] $payload")
+        }
         
         fun logCommand(command: String, topic: String) {
-            if (ENABLE_MQTT_LOGGING) {
-                android.util.Log.d(LOG_TAG, "MQTT Publish: $topic = $command")
-            }
+            Log.d("MqttCommand", "[$topic] $command")
         }
-        
-        fun logTelemetry(topic: String, payload: String) {
-            if (ENABLE_MQTT_LOGGING) {
-                android.util.Log.d(LOG_TAG, "MQTT Received: $topic = $payload")
-            }
+    }
+
+    fun saveDeviceId(deviceId: String) {
+        val normalized = normalizeDeviceId(deviceId)
+        preferences?.edit()?.putString(KEY_DEVICE_ID, normalized)?.apply()
+    }
+
+    fun getDeviceId(): String {
+        val stored = preferences?.getString(KEY_DEVICE_ID, null)
+        val normalized = normalizeDeviceId(stored)
+        if (stored != normalized) {
+            saveDeviceId(normalized)
         }
+        return normalized
+    }
+
+    fun normalizeDeviceId(raw: String?): String {
+        val sanitized = raw
+            ?.lowercase()
+            ?.replace("[^a-z0-9_-]".toRegex(), "-")
+            ?.trim('-')
+        return if (sanitized.isNullOrBlank()) DEFAULT_DEVICE_ID else sanitized
     }
 }

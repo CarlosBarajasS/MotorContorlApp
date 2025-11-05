@@ -36,6 +36,13 @@ class MqttService(private val context: Context) {
     // Estado de conexión
     private var isConnecting = false
     private var currentServerUri = ""
+    private var currentDeviceId: String
+    private var subscribedDeviceId: String? = null
+
+    init {
+        MqttConfig.init(context)
+        currentDeviceId = MqttConfig.getDeviceId()
+    }
     
     /**
      * Conectar al broker MQTT usando HiveMQ Client
@@ -95,62 +102,101 @@ class MqttService(private val context: Context) {
      * Suscribirse a topics de telemetría del motor
      */
     private fun subscribeToTelemetryTopics() {
+        val deviceId = currentDeviceId
+        subscribedDeviceId = deviceId
         val topics = arrayOf(
-            MqttConfig.Topics.MOTOR_SPEED,
-            MqttConfig.Topics.MOTOR_STATE,
-            MqttConfig.Topics.MOTOR_CURRENT,
-            MqttConfig.Topics.MOTOR_VOLTAGE,
-            MqttConfig.Topics.MOTOR_RAW
+            MqttConfig.Topics.speed(deviceId),
+            MqttConfig.Topics.state(deviceId),
+            MqttConfig.Topics.current(deviceId),
+            MqttConfig.Topics.voltage(deviceId),
+            MqttConfig.Topics.raw(deviceId),
+            MqttConfig.Topics.type(deviceId)
         )
         
-        topics.forEach { topic ->
+        topics.forEach { topicName ->
             mqttClient?.subscribeWith()
-                ?.topicFilter(topic)
-                ?.qos(MqttQos.AT_LEAST_ONCE)  // ✅ Sintaxis correcta HiveMQ
+                ?.topicFilter(topicName)
+                ?.qos(MqttQos.AT_LEAST_ONCE)
                 ?.callback { publish ->
-                    handleIncomingMessage(publish.topic.toString(), String(publish.payloadAsBytes))
+                    val topicStr = publish.topic.toString()
+                    val payloadStr = String(publish.payloadAsBytes)
+                    handleIncomingMessage(topicStr, payloadStr)
                 }
                 ?.send()
                 ?.whenComplete { subAck, throwable ->
                     if (throwable != null) {
-                        Log.e(TAG, "Failed to subscribe to $topic", throwable)
+                        Log.e(TAG, "Failed to subscribe to $topicName", throwable)
                     } else {
-                        Log.d(TAG, "Subscribed to $topic successfully")
+                        Log.d(TAG, "Subscribed to $topicName successfully")
                     }
                 }
         }
     }
-    
+
+    private fun unsubscribeFromDevice(deviceId: String?) {
+        if (deviceId.isNullOrBlank()) return
+        val client = mqttClient ?: return
+        listOf(
+            MqttConfig.Topics.speed(deviceId),
+            MqttConfig.Topics.state(deviceId),
+            MqttConfig.Topics.current(deviceId),
+            MqttConfig.Topics.voltage(deviceId),
+            MqttConfig.Topics.raw(deviceId),
+            MqttConfig.Topics.type(deviceId)
+        ).forEach { topic ->
+            client.unsubscribeWith()
+                .topicFilter(topic)
+                .send()
+                .whenComplete { _, throwable ->
+                    if (throwable != null) {
+                        Log.w(TAG, "Failed to unsubscribe from $topic", throwable)
+                    }
+                }
+        }
+    }
+
+    fun updateDeviceId(deviceId: String) {
+        val normalized = MqttConfig.normalizeDeviceId(deviceId)
+        if (normalized == currentDeviceId) return
+        val previous = currentDeviceId
+        currentDeviceId = normalized
+        MqttConfig.saveDeviceId(normalized)
+        if (isConnected()) {
+            unsubscribeFromDevice(previous)
+            subscribeToTelemetryTopics()
+        }
+    }
+
     /**
      * Manejar mensajes entrantes del broker MQTT
      */
-    private fun handleIncomingMessage(topic: String, payload: String) {
-        MqttConfig.Debug.logTelemetry(topic, payload)
+    private fun handleIncomingMessage(topicStr: String, payload: String) {
+        MqttConfig.Debug.logTelemetry(topicStr, payload)
         
-        when (topic) {
-            MqttConfig.Topics.MOTOR_SPEED -> {
+        val metric = topicStr.substringAfterLast('/')
+        when (metric) {
+            "speed" -> {
                 payload.toIntOrNull()?.let { speed ->
                     onSpeedReceived?.invoke(speed)
                 }
             }
-            
-            MqttConfig.Topics.MOTOR_STATE -> {
+            "state" -> {
                 onStatusReceived?.invoke(payload)
             }
-            
-            MqttConfig.Topics.MOTOR_CURRENT -> {
+            "current" -> {
                 payload.toFloatOrNull()?.let { current ->
                     onCurrentReceived?.invoke(current)
                 }
             }
-            
-            MqttConfig.Topics.MOTOR_VOLTAGE -> {
+            "voltage" -> {
                 payload.toFloatOrNull()?.let { voltage ->
                     onVoltageReceived?.invoke(voltage)
                 }
             }
-            
-            MqttConfig.Topics.MOTOR_RAW -> {
+            "type" -> {
+                onStatusReceived?.invoke(payload)
+            }
+            "raw" -> {
                 Log.d(TAG, "Raw motor data: $payload")
             }
         }
@@ -159,7 +205,7 @@ class MqttService(private val context: Context) {
     /**
      * Publicar comando al motor usando HiveMQ
      */
-    fun publish(topic: String, message: String) {
+    fun publish(topicName: String, message: String) {
         try {
             if (!isConnected()) {
                 Log.w(TAG, "Cannot publish - not connected to MQTT broker")
@@ -167,15 +213,15 @@ class MqttService(private val context: Context) {
             }
             
             mqttClient?.publishWith()
-                ?.topic(topic)
+                ?.topic(topicName)
                 ?.payload(message.toByteArray())
-                ?.qos(MqttQos.AT_LEAST_ONCE)  // ✅ Sintaxis correcta HiveMQ
+                ?.qos(MqttQos.AT_LEAST_ONCE)
                 ?.send()
                 ?.whenComplete { publishResult, throwable ->
                     if (throwable != null) {
-                        Log.e(TAG, "Failed to publish message to $topic", throwable)
+                        Log.e(TAG, "Failed to publish message to $topicName", throwable)
                     } else {
-                        MqttConfig.Debug.logCommand(message, topic)
+                        MqttConfig.Debug.logCommand(message, topicName)
                     }
                 }
             
@@ -188,25 +234,28 @@ class MqttService(private val context: Context) {
      * Enviar comando de arranque suave (6 pasos)
      */
     fun sendArranque6P(values: List<Int>) {
-        val command = MqttConfig.Commands.createArranque6P(values)
-        publish(MqttConfig.Topics.MOTOR_COMMAND, command)
-        publish(MqttConfig.Topics.MOTOR_TYPE, "arranque6p")
+        val command = MqttConfig.Commands.arranqueSuavePayload(values)
+        val deviceId = currentDeviceId
+        publish(MqttConfig.Topics.command(deviceId), command)
+        publish(MqttConfig.Topics.type(deviceId), "arranque6p")
     }
     
     /**
      * Enviar comando de arranque continuo
      */
     fun sendContinuo() {
-        publish(MqttConfig.Topics.MOTOR_COMMAND, MqttConfig.Commands.CONTINUO)
-        publish(MqttConfig.Topics.MOTOR_TYPE, "continuo")
+        val deviceId = currentDeviceId
+        publish(MqttConfig.Topics.command(deviceId), MqttConfig.Commands.continuoPayload())
+        publish(MqttConfig.Topics.type(deviceId), "continuo")
     }
     
     /**
      * Enviar comando de paro de emergencia
      */
     fun sendParo() {
-        publish(MqttConfig.Topics.MOTOR_COMMAND, MqttConfig.Commands.PARO)
-        publish(MqttConfig.Topics.MOTOR_TYPE, "paro")
+        val deviceId = currentDeviceId
+        publish(MqttConfig.Topics.command(deviceId), MqttConfig.Commands.paroPayload())
+        publish(MqttConfig.Topics.type(deviceId), "paro")
     }
     
     // ============================================
@@ -243,6 +292,7 @@ class MqttService(private val context: Context) {
      */
     fun disconnect() {
         try {
+            unsubscribeFromDevice(subscribedDeviceId)
             mqttClient?.disconnect()?.whenComplete { _, throwable ->
                 if (throwable != null) {
                     Log.e(TAG, "Error disconnecting from MQTT", throwable)
@@ -250,6 +300,7 @@ class MqttService(private val context: Context) {
                     Log.d(TAG, "MQTT Disconnected successfully")
                 }
             }
+            subscribedDeviceId = null
         } catch (e: Exception) {
             Log.e(TAG, "Error disconnecting from MQTT", e)
         }

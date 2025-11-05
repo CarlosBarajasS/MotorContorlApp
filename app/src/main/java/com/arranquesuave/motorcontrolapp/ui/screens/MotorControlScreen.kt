@@ -42,6 +42,8 @@ fun MotorControlScreen(
     val status by viewModel.status.collectAsState()
     val currentUrl by viewModel.currentUrl.collectAsState()
     val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
+    val localIp by viewModel.localEsp32Ip.collectAsState()
+    val esp32Status by viewModel.esp32Status.collectAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Logo de fondo desvanecido
@@ -99,6 +101,7 @@ fun MotorControlScreen(
                 item {
                     ConnectionModeSelector(
                         currentMode = connectionMode,
+                        localIp = localIp,
                         onModeChanged = { newMode ->
                             viewModel.switchConnectionMode(newMode)
                         },
@@ -113,7 +116,9 @@ fun MotorControlScreen(
                         onOpenBluetoothDialog = {
                             // Navegar a la pantalla de Bluetooth para discovery
                             onNavigateSettings()
-                        }
+                        },
+                        esp32Status = esp32Status,
+                        onRefreshEsp32Status = { viewModel.refreshEsp32Status() }
                     )
                 }
 
