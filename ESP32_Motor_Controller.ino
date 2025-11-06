@@ -44,6 +44,7 @@ String device_name = "MotorController";
 
 String mqttTopicCommand;
 String mqttTopicSpeed;
+String mqttTopicSpeedCommand;
 String mqttTopicState;
 String mqttTopicCurrent;
 String mqttTopicVoltage;
@@ -95,6 +96,7 @@ void buildMqttTopics() {
   String base = "motor/" + device_name;
   mqttTopicCommand = base + "/command";
   mqttTopicSpeed = base + "/speed";
+  mqttTopicSpeedCommand = base + "/speed/set";
   mqttTopicState = base + "/state";
   mqttTopicCurrent = base + "/current";
   mqttTopicVoltage = base + "/voltage";
@@ -423,7 +425,7 @@ void reconnectMQTT() {
     
     // Suscribirse a topics de comandos
     mqtt.subscribe(mqttTopicCommand.c_str());
-    mqtt.subscribe(mqttTopicSpeed.c_str());
+    mqtt.subscribe(mqttTopicSpeedCommand.c_str());
     mqtt.subscribe(mqttTopicType.c_str());
     
     // Publicar estado inicial
@@ -447,7 +449,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   
   if (String(topic) == mqttTopicCommand) {
     handleMotorCommand(message);
-  } else if (String(topic) == mqttTopicSpeed) {
+  } else if (String(topic) == mqttTopicSpeedCommand) {
     if (rampInProgress) {
       Serial.println("Speed command ignored during ramp");
       return;

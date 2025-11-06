@@ -80,4 +80,12 @@ interface MotorController {
     fun setOnVoltageReceived(callback: (Float) -> Unit) {
         // Implementación por defecto vacía para controladores que no soportan telemetría extendida
     }
+
+    /**
+     * Configurar callback para recibir el modo actual reportado por el motor (opcional)
+     * @param callback Función que recibe el modo como cadena (arranque6p, continuo, paro, etc.)
+     */
+    fun setOnModeReceived(callback: (String) -> Unit) {
+        // Implementación por defecto vacía
+    }
 }

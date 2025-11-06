@@ -32,6 +32,7 @@ class MqttService(private val context: Context) {
     private var onStatusReceived: ((String) -> Unit)? = null
     private var onCurrentReceived: ((Float) -> Unit)? = null
     private var onVoltageReceived: ((Float) -> Unit)? = null
+    private var onModeReceived: ((String) -> Unit)? = null
     
     // Estado de conexión
     private var isConnecting = false
@@ -194,7 +195,7 @@ class MqttService(private val context: Context) {
                 }
             }
             "type" -> {
-                onStatusReceived?.invoke(payload)
+                onModeReceived?.invoke(payload)
             }
             "raw" -> {
                 Log.d(TAG, "Raw motor data: $payload")
@@ -276,6 +277,10 @@ class MqttService(private val context: Context) {
     
     fun setOnVoltageReceived(callback: (Float) -> Unit) {
         onVoltageReceived = callback
+    }
+
+    fun setOnModeReceived(callback: (String) -> Unit) {
+        onModeReceived = callback
     }
     
     // ============================================

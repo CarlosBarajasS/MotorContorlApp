@@ -68,6 +68,7 @@ object MqttConfig {
     object Topics {
         fun command(deviceId: String) = "motor/$deviceId/command"
         fun speed(deviceId: String) = "motor/$deviceId/speed"
+        fun speedCommand(deviceId: String) = "motor/$deviceId/speed/set"
         fun state(deviceId: String) = "motor/$deviceId/state"
         fun current(deviceId: String) = "motor/$deviceId/current"
         fun voltage(deviceId: String) = "motor/$deviceId/voltage"

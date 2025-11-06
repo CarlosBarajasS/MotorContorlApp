@@ -28,6 +28,7 @@ class MqttMotorController(
     private var onStatusCallback: ((String) -> Unit)? = null
     private var onCurrentCallback: ((Float) -> Unit)? = null
     private var onVoltageCallback: ((Float) -> Unit)? = null
+    private var onModeCallback: ((String) -> Unit)? = null
     
     /**
      * Conectar al broker MQTT
@@ -77,6 +78,11 @@ class MqttMotorController(
         mqttService.setOnVoltageReceived { voltage ->
             Log.d(TAG, "Voltage received: $voltage V")
             onVoltageCallback?.invoke(voltage)
+        }
+
+        mqttService.setOnModeReceived { mode ->
+            Log.d(TAG, "Mode received: $mode")
+            onModeCallback?.invoke(mode)
         }
     }
     
@@ -206,5 +212,9 @@ class MqttMotorController(
     
     override fun setOnVoltageReceived(callback: (Float) -> Unit) {
         onVoltageCallback = callback
+    }
+
+    override fun setOnModeReceived(callback: (String) -> Unit) {
+        onModeCallback = callback
     }
 }

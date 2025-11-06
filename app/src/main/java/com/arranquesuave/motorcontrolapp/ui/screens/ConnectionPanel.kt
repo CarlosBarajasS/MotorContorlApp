@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.arranquesuave.motorcontrolapp.network.ESP32Status
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
+import java.util.Locale
 
 @Composable
 fun ConnectionPanel(
@@ -31,6 +32,7 @@ fun ConnectionPanel(
     val status by viewModel.status.collectAsState()
     val connectedDeviceAddress by viewModel.connectedDeviceAddress.collectAsState()
     val speed by viewModel.speed.collectAsState()
+    val motorMode by viewModel.motorMode.collectAsState()
     
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -52,6 +54,7 @@ fun ConnectionPanel(
             // Estado de conexión
             StatusCard(
                 status = status,
+                motorMode = motorMode,
                 connectedDevice = connectedDeviceAddress,
                 speed = speed,
                 esp32Status = esp32Status,
@@ -138,6 +141,7 @@ fun ConnectionPanel(
 @Composable
 private fun StatusCard(
     status: String,
+    motorMode: String?,
     connectedDevice: String?,
     speed: Int,
     esp32Status: ESP32Status?,
@@ -175,6 +179,13 @@ private fun StatusCard(
                     fontSize = 12.sp,
                     color = Color(0xFF4A7C59)
                 )
+                if (!motorMode.isNullOrBlank()) {
+                    Text(
+                        text = "Modo: ${motorMode.uppercase(Locale.getDefault())}",
+                        fontSize = 12.sp,
+                        color = Color(0xFF4A7C59)
+                    )
+                }
                 Text(
                     text = "Velocidad: $speed RPM",
                     fontSize = 12.sp,

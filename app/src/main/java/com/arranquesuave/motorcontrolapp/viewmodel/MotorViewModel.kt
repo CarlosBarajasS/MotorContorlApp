@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 class MotorViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -78,6 +79,9 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _motorRunning = MutableStateFlow(false)
     val motorRunning: StateFlow<Boolean> = _motorRunning
+
+    private val _motorMode = MutableStateFlow<String?>(null)
+    val motorMode: StateFlow<String?> = _motorMode
     
     // Información de conexión
     private val _currentUrl = MutableStateFlow("")
@@ -109,6 +113,59 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 _localEsp32Ip.value = config.esp32IP
                 if (_connectionMode.value == ConnectionMode.WIFI_LOCAL) {
                     _currentUrl.value = config.esp32IP?.let { "http://$it" } ?: "Sin configurar"
+                }
+            }
+        }
+    }
+
+    private fun attachControllerCallbacks(controller: MotorController) {
+        controller.setOnSpeedReceived { speed ->
+            _speed.value = speed
+        }
+
+        controller.setOnStatusReceived { status ->
+            val normalized = status.lowercase(Locale.getDefault())
+            when (normalized) {
+                "running" -> {
+                    _motorRunning.value = true
+                    _status.value = "Motor en marcha"
+                }
+                "stopped" -> {
+                    _motorRunning.value = false
+                    _status.value = "Motor detenido"
+                }
+                "paro", "stop" -> {
+                    _motorRunning.value = false
+                    _status.value = "Motor detenido (paro)"
+                }
+                else -> {
+                    if (status.isNotBlank()) {
+                        _status.value = "Motor: $status"
+                    }
+                }
+            }
+        }
+
+        controller.setOnModeReceived { mode ->
+            if (mode.isBlank()) return@setOnModeReceived
+
+            _motorMode.value = mode
+            val normalized = mode.lowercase(Locale.getDefault())
+            when (normalized) {
+                "arranque6p" -> {
+                    _motorRunning.value = true
+                    _status.value = "🚀 Arranque suave en progreso"
+                }
+                "continuo" -> {
+                    _motorRunning.value = true
+                    _status.value = "⚡ Modo continuo activo"
+                }
+                "paro", "stop" -> {
+                    _motorRunning.value = false
+                    _status.value = "🛑 Motor detenido"
+                }
+                else -> {
+                    _status.value = "Modo: $mode"
                 }
             }
         }
@@ -249,15 +306,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             
-            // Configurar callbacks de telemetría
-            currentController?.setOnSpeedReceived { speed ->
-                _speed.value = speed
-            }
-            
-            currentController?.setOnStatusReceived { status ->
-                _motorRunning.value = status == "running"
-                _status.value = "Motor: $status"
-            }
+            currentController?.let { attachControllerCallbacks(it) }
             
             // Conectar
             currentController?.connect()?.fold(
@@ -315,14 +364,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 else -> return@launch
             }
             
-            // Configurar callbacks
-            currentController?.setOnSpeedReceived { speed ->
-                _speed.value = speed
-            }
-            
-            currentController?.setOnStatusReceived { status ->
-                _motorRunning.value = status == "running"
-            }
+            currentController?.let { attachControllerCallbacks(it) }
             
             // Conectar
             currentController?.connect()?.fold(
@@ -352,6 +394,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         currentController?.sendArranque6P(values)?.fold(
             onSuccess = {
                 _status.value = "✅ Arranque suave enviado: ${values.joinToString(",")}"
+                _motorMode.value = "arranque6p"
                 _motorRunning.value = true
             },
             onFailure = { error ->
@@ -369,6 +412,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         currentController?.sendContinuo()?.fold(
             onSuccess = {
                 _status.value = "✅ Arranque continuo activado"
+                _motorMode.value = "continuo"
                 _motorRunning.value = true
             },
             onFailure = { error ->
@@ -386,6 +430,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         currentController?.sendParo()?.fold(
             onSuccess = {
                 _status.value = "✅ Motor detenido"
+                _motorMode.value = "paro"
                 _motorRunning.value = false
                 _speed.value = 0
             },
@@ -450,6 +495,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         _connectedDeviceAddress.value = null
         _status.value = "Disconnected"
         _motorRunning.value = false
+        _motorMode.value = null
         _speed.value = 0
         if (_connectionMode.value == ConnectionMode.WIFI_LOCAL) {
             _esp32Status.value = null
