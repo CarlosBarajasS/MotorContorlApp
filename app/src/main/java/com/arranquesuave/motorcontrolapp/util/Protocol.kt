@@ -18,12 +18,13 @@ object Protocol {
 
     /** Codifica arranque suave ASCII: "v0a,v1b,...,v5f" */
     fun encodeArranqueSuave(values: List<Int>): ByteArray {
-        // Mapea cada valor con su sufijo a-f
-        val parts = values.take(6).mapIndexed { index, v ->
-            // 'a'+index genera 'a','b',... 'f'
-            "${v.coerceIn(0,254)}${('a' + index)}"
-        }
-        return parts.joinToString(",").toByteArray(Charsets.UTF_8)
+        val suffixes = charArrayOf('a', 'b', 'c', 'd', 'e', 'f')
+        val payload = values.take(6)
+            .mapIndexed { index, value ->
+                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }}"
+            }
+            .joinToString(",")
+        return "arranque6p:$payload".toByteArray(Charsets.UTF_8)
     }
 
     /** Codifica arranque continuo ASCII: "0i," */

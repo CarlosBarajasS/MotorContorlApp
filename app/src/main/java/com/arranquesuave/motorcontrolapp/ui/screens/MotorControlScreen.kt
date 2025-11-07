@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import com.arranquesuave.motorcontrolapp.R
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,10 +41,15 @@ fun MotorControlScreen(
     val motorRunning by viewModel.motorRunning.collectAsState()
     val connectionMode by viewModel.connectionMode.collectAsState()
     val status by viewModel.status.collectAsState()
+    val motorMode by viewModel.motorMode.collectAsState()
     val currentUrl by viewModel.currentUrl.collectAsState()
     val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
     val localIp by viewModel.localEsp32Ip.collectAsState()
     val esp32Status by viewModel.esp32Status.collectAsState()
+    val normalizedMode = motorMode?.lowercase(Locale.getDefault())
+    val isStoppedMode = normalizedMode == "paro" || normalizedMode == "stop" || normalizedMode == "stopped"
+    val canSendStart = !motorRunning || isStoppedMode
+    val canSendStop = motorRunning && !isStoppedMode
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Logo de fondo desvanecido
@@ -182,7 +188,7 @@ fun MotorControlScreen(
                         Spacer(Modifier.height(16.dp))
                         Button(
                             onClick = { viewModel.sendArranque6P() },
-                            enabled = !motorRunning,
+                            enabled = canSendStart,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF29D07F))
@@ -192,7 +198,7 @@ fun MotorControlScreen(
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = { viewModel.sendContinuo() },
-                            enabled = !motorRunning,
+                            enabled = canSendStart,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE5F2EC))
@@ -202,7 +208,7 @@ fun MotorControlScreen(
                         Spacer(Modifier.height(8.dp))
                         Button(
                             onClick = { viewModel.sendParo() },
-                            enabled = motorRunning,
+                            enabled = canSendStop,
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(24.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)

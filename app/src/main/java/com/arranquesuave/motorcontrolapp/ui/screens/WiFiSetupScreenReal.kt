@@ -2,7 +2,6 @@ package com.arranquesuave.motorcontrolapp.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -283,7 +282,10 @@ private fun StepProgressIndicator(state: WiFiSetupState) {
             )
 
             if (index < setupSteps.lastIndex) {
-                StepDivider(isActive = index < currentIndex)
+                StepDivider(
+                    modifier = Modifier.weight(1f),
+                    isActive = index < currentIndex
+                )
             }
         }
     }
@@ -355,10 +357,12 @@ private fun StepNode(
 }
 
 @Composable
-private fun RowScope.StepDivider(isActive: Boolean) {
+private fun StepDivider(
+    modifier: Modifier = Modifier,
+    isActive: Boolean
+) {
     Box(
-        modifier = Modifier
-            .weight(1f)
+        modifier = modifier
             .height(2.dp)
             .background(
                 color = if (isActive) {

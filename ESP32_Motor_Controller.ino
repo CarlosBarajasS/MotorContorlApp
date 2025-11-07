@@ -13,6 +13,10 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ctype.h>
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+#include "BluetoothSerial.h"
+#include <esp_gap_bt_api.h>
+#endif
 
 // ======================================================================
 // CONFIGURACIÓN
@@ -51,6 +55,18 @@ String mqttTopicVoltage;
 String mqttTopicRaw;
 String mqttTopicType;
 
+enum ControlChannel {
+  CONTROL_WIFI = 0,
+  CONTROL_BLUETOOTH = 1
+};
+
+ControlChannel activeControl = CONTROL_WIFI;
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+void handleBluetooth();
+void processBluetoothCommand(String command);
+#endif
+
 // Tiempos de conexión WiFi
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
 const uint32_t WIFI_RETRY_INTERVAL_MS = 500;
@@ -82,6 +98,30 @@ struct WiFiConfig {
   String password = "";
   bool configured = false;
 } wifiConfig;
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+BluetoothSerial btSerial;
+bool bluetoothReady = false;
+bool bluetoothClientConnected = false;
+String bluetoothBuffer = "";
+unsigned long lastBluetoothActivity = 0;
+const unsigned long BLUETOOTH_PRIORITY_TIMEOUT_MS = 60000;
+
+void sendBluetoothResponse(const String& status, const String& command, const String& message = "") {
+  if (!bluetoothReady) return;
+  String payload = "{\"status\":\"" + status + "\"";
+  if (command.length()) {
+    payload += ",\"command\":\"" + command + "\"";
+  }
+  if (message.length()) {
+    payload += ",\"message\":\"" + message + "\"";
+  }
+  payload += ",\"controller\":\"" + String(activeControl == CONTROL_BLUETOOTH ? "bluetooth" : "wifi") + "\"";
+  payload += "}";
+  btSerial.println(payload);
+  Serial.println("Bluetooth ACK -> " + payload);
+}
+#endif
 
 // ======================================================================
 // SETUP
@@ -130,6 +170,21 @@ void setup() {
   
   // Configurar servidor web
   setupWebServer();
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+  // Usar emparejamiento clásico con PIN fijo para evitar códigos aleatorios
+  esp_bt_pin_code_t pinCode = {'1', '2', '3', '4'};
+  esp_bt_gap_set_pin(ESP_BT_PIN_TYPE_FIXED, 4, pinCode);
+  btSerial.setPin("1234", 4);
+  if (btSerial.begin("ESP32-MotorController")) {
+    bluetoothReady = true;
+    Serial.println("Bluetooth SPP ready (device name: ESP32-MotorController)");
+  } else {
+    Serial.println("Failed to start Bluetooth SPP service");
+  }
+#else
+  Serial.println("Bluetooth stack not enabled for this firmware build");
+#endif
   
   Serial.println("=== Setup Complete ===");
 }
@@ -140,6 +195,12 @@ void setup() {
 
 void loop() {
   server.handleClient();
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+  if (bluetoothReady) {
+    handleBluetooth();
+  }
+#endif
   
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqtt.connected()) {
@@ -367,6 +428,14 @@ void handleStatus() {
   json["mqtt_connected"] = mqtt.connected();
   json["mqtt_broker"] = mqtt_broker;
   json["device_name"] = device_name;
+  json["control_channel"] = (activeControl == CONTROL_WIFI) ? "wifi" : "bluetooth";
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+  json["bluetooth_ready"] = bluetoothReady;
+  json["bluetooth_client"] = bluetoothClientConnected;
+#else
+  json["bluetooth_ready"] = false;
+  json["bluetooth_client"] = false;
+#endif
   json["uptime"] = millis();
   json["free_heap"] = ESP.getFreeHeap();
   
@@ -438,6 +507,11 @@ void reconnectMQTT() {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (activeControl != CONTROL_WIFI) {
+    Serial.println("MQTT command ignored: Bluetooth control active");
+    return;
+  }
+
   String message = "";
   for (int i = 0; i < length; i++) {
     message += (char)payload[i];
@@ -514,6 +588,31 @@ bool isArranquePayload(const String& payload) {
     start = commaIndex + 1;
   }
   return tokens > 0;
+}
+
+bool extractStepValue(String token, int& outValue) {
+  token.trim();
+  if (token.length() == 0) return false;
+
+  char last = token.charAt(token.length() - 1);
+  if (!isDigit(last)) {
+    char lower = tolower(last);
+    if (lower >= 'a' && lower <= 'f') {
+      token.remove(token.length() - 1);
+    } else {
+      return false;
+    }
+  }
+
+  if (token.length() == 0) return false;
+  for (unsigned int i = 0; i < token.length(); i++) {
+    if (!isDigit(token.charAt(i))) {
+      return false;
+    }
+  }
+
+  outValue = token.toInt();
+  return true;
 }
 
 void handleMotorCommand(String command) {
@@ -600,7 +699,12 @@ void handleArranque6P(String command) {
     int commaIndex = remaining.indexOf(',');
     String token = (commaIndex == -1) ? remaining : remaining.substring(0, commaIndex);
     token.trim();
-    stepSpeeds[stepCount++] = token.toInt();
+    int parsedValue = 0;
+    if (!extractStepValue(token, parsedValue)) {
+      Serial.println("Invalid step token: " + token);
+      return;
+    }
+    stepSpeeds[stepCount++] = parsedValue;
     if (commaIndex == -1) {
       break;
     }
@@ -765,3 +869,94 @@ void loadConfiguration() {
     Serial.println("Device ID: " + device_name);
   }
 }
+
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+void processBluetoothCommand(String command) {
+  command.trim();
+  if (command.length() == 0) return;
+
+  Serial.println("[Bluetooth] Received: " + command);
+
+  if (command.equalsIgnoreCase("wifi") || command.equalsIgnoreCase("mode:wifi")) {
+    activeControl = CONTROL_WIFI;
+    sendBluetoothResponse("ok", "mode", "wifi");
+    Serial.println("Control switched to WiFi via Bluetooth request");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("bluetooth") || command.equalsIgnoreCase("mode:bluetooth")) {
+    activeControl = CONTROL_BLUETOOTH;
+    sendBluetoothResponse("ok", "mode", "bluetooth");
+    return;
+  }
+
+  if (command.startsWith("speed=") || command.startsWith("pwm=")) {
+    int value = command.substring(command.indexOf('=') + 1).toInt();
+    setMotorSpeed(value);
+    sendBluetoothResponse("ok", "speed", String(motorState.speed));
+    activeControl = CONTROL_BLUETOOTH;
+    lastBluetoothActivity = millis();
+    return;
+  }
+
+  if (command.startsWith("arranque6p") || command.startsWith("arranque6P")) {
+    activeControl = CONTROL_BLUETOOTH;
+    lastBluetoothActivity = millis();
+    handleMotorCommand(command);
+    sendBluetoothResponse("ok", "arranque6p");
+    return;
+  }
+
+  // Comandos clásicos (0p,0i,start, etc.)
+  activeControl = CONTROL_BLUETOOTH;
+  lastBluetoothActivity = millis();
+  if (command.equalsIgnoreCase("start") ||
+      command.equalsIgnoreCase("paro") ||
+      command.equalsIgnoreCase("stop") ||
+      command.equalsIgnoreCase("continuo") ||
+      command.equalsIgnoreCase("0p") ||
+      command.equalsIgnoreCase("0i")) {
+    handleMotorCommand(command);
+    sendBluetoothResponse("ok", command);
+  } else {
+    sendBluetoothResponse("error", command, "unknown_command");
+    Serial.println("Bluetooth command not recognized: " + command);
+  }
+}
+
+void handleBluetooth() {
+  if (!bluetoothReady) return;
+
+  bool currentClient = btSerial.hasClient();
+  if (currentClient && !bluetoothClientConnected) {
+    bluetoothClientConnected = true;
+    activeControl = CONTROL_BLUETOOTH;
+    Serial.println("Bluetooth client connected - MQTT commands paused");
+  } else if (!currentClient && bluetoothClientConnected) {
+    bluetoothClientConnected = false;
+    Serial.println("Bluetooth client disconnected");
+    lastBluetoothActivity = millis();
+  }
+
+  while (currentClient && btSerial.available()) {
+    char c = btSerial.read();
+    if (c == '\n') {
+      processBluetoothCommand(bluetoothBuffer);
+      bluetoothBuffer = "";
+    } else if (c != '\r') {
+      if (bluetoothBuffer.length() < 256) {
+        bluetoothBuffer += c;
+      }
+    }
+  }
+
+  if (activeControl == CONTROL_BLUETOOTH) {
+    if (currentClient) {
+      lastBluetoothActivity = millis();
+    } else if ((millis() - lastBluetoothActivity) > BLUETOOTH_PRIORITY_TIMEOUT_MS) {
+      activeControl = CONTROL_WIFI;
+      Serial.println("Bluetooth inactive, returning to WiFi control");
+    }
+  }
+}
+#endif

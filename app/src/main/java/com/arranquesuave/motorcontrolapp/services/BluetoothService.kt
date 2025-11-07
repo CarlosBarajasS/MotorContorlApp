@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.util.Log
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,10 @@ import java.io.IOException
 import java.util.*
 
 class BluetoothService(private val ctx: Context) {
+
+    companion object {
+        private const val TAG = "BluetoothService"
+    }
     private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     private var socket: BluetoothSocket? = null
     private val sppUuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
@@ -79,20 +84,36 @@ class BluetoothService(private val ctx: Context) {
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     suspend fun connect(device: BluetoothDevice) = withContext(Dispatchers.IO) {
         adapter?.cancelDiscovery()
-        var attempt = 0
         var lastError: Exception? = null
-        while (attempt < 3) {
-            try {
-                @Suppress("MissingPermission")
-                val sock = device.createInsecureRfcommSocketToServiceRecord(sppUuid)
-                @Suppress("MissingPermission")
-                sock.connect()
-                socket = sock
-                return@withContext
-            } catch (e: Exception) {
-                lastError = e
-                attempt++
-                delay(1000)
+        val factories: List<(BluetoothDevice) -> BluetoothSocket> = listOf(
+            { dev ->
+                dev.createRfcommSocketToServiceRecord(sppUuid)
+            },
+            { dev ->
+                dev.createInsecureRfcommSocketToServiceRecord(sppUuid)
+            }
+        )
+
+        for (factory in factories) {
+            var attempt = 0
+            while (attempt < 2) {
+                try {
+                    @Suppress("MissingPermission")
+                    val sock = factory(device)
+                    @Suppress("MissingPermission")
+                    sock.connect()
+                    socket = sock
+                    Log.d(TAG, "Bluetooth connected using ${if (factory == factories[0]) "secure" else "insecure"} socket")
+                    return@withContext
+                } catch (e: Exception) {
+                    try {
+                        socket?.close()
+                    } catch (_: IOException) {}
+                    lastError = e
+                    Log.w(TAG, "Bluetooth connect attempt failed", e)
+                    attempt++
+                    delay(500)
+                }
             }
         }
         throw lastError ?: IOException("Failed to connect device")
@@ -117,6 +138,7 @@ class BluetoothService(private val ctx: Context) {
 
     fun close() {
         try { socket?.close() } catch (_: IOException) {}
+        socket = null
     }
 
     /** Retorna si el socket está conectado */

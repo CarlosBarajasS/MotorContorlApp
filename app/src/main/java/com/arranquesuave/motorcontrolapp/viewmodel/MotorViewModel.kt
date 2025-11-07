@@ -24,6 +24,28 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 class MotorViewModel(application: Application) : AndroidViewModel(application) {
+    
+    private val runningModes = setOf("arranque6p", "continuo", "running")
+    private val stoppedModes = setOf("paro", "stop", "stopped")
+
+    private fun updateRunningStateFromMode(mode: String?) {
+        val normalized = mode?.lowercase(Locale.getDefault()) ?: return
+        when {
+            runningModes.contains(normalized) -> {
+                if (!_motorRunning.value) {
+                    _motorRunning.value = true
+                }
+            }
+            stoppedModes.contains(normalized) -> {
+                if (_motorRunning.value) {
+                    _motorRunning.value = false
+                }
+                if (_speed.value != 0) {
+                    _speed.value = 0
+                }
+            }
+        }
+    }
 
     // ============================================
     // ENUMS Y CONFIGURACIÓN
@@ -133,10 +155,16 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 "stopped" -> {
                     _motorRunning.value = false
                     _status.value = "Motor detenido"
+                    if (_speed.value != 0) {
+                        _speed.value = 0
+                    }
                 }
                 "paro", "stop" -> {
                     _motorRunning.value = false
                     _status.value = "Motor detenido (paro)"
+                    if (_speed.value != 0) {
+                        _speed.value = 0
+                    }
                 }
                 else -> {
                     if (status.isNotBlank()) {
@@ -150,18 +178,16 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
             if (mode.isBlank()) return@setOnModeReceived
 
             _motorMode.value = mode
+            updateRunningStateFromMode(mode)
             val normalized = mode.lowercase(Locale.getDefault())
             when (normalized) {
                 "arranque6p" -> {
-                    _motorRunning.value = true
                     _status.value = "🚀 Arranque suave en progreso"
                 }
                 "continuo" -> {
-                    _motorRunning.value = true
                     _status.value = "⚡ Modo continuo activo"
                 }
                 "paro", "stop" -> {
-                    _motorRunning.value = false
                     _status.value = "🛑 Motor detenido"
                 }
                 else -> {
@@ -395,7 +421,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = {
                 _status.value = "✅ Arranque suave enviado: ${values.joinToString(",")}"
                 _motorMode.value = "arranque6p"
-                _motorRunning.value = true
+                updateRunningStateFromMode("arranque6p")
             },
             onFailure = { error ->
                 _status.value = "❌ Error arranque: ${error.localizedMessage}"
@@ -413,7 +439,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = {
                 _status.value = "✅ Arranque continuo activado"
                 _motorMode.value = "continuo"
-                _motorRunning.value = true
+                updateRunningStateFromMode("continuo")
             },
             onFailure = { error ->
                 _status.value = "❌ Error continuo: ${error.localizedMessage}"
@@ -431,8 +457,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
             onSuccess = {
                 _status.value = "✅ Motor detenido"
                 _motorMode.value = "paro"
-                _motorRunning.value = false
-                _speed.value = 0
+                updateRunningStateFromMode("paro")
             },
             onFailure = { error ->
                 _status.value = "❌ Error paro: ${error.localizedMessage}"
