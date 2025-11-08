@@ -1,109 +1,123 @@
 # MotorControlApp
 
-Proyecto de aplicación Android para control de motor vía Bluetooth Classic SPP.
+Aplicación Android (Jetpack Compose + MVVM) y firmware ESP32 para controlar un motor de inducción con arranque suave, paro seguro y telemetría básica. El sistema opera en tres modos: **Bluetooth clásico**, **WiFi local con broker MQTT del profesor** y **MQTT remoto**. La app puede poner al ESP32 en modo configuración, enviar las credenciales WiFi y reconectar automáticamente al broker `177.247.175.4:1885`.
 
-## Contexto Académico
-Este proyecto forma parte de:
-- **Residencias Profesionales** (Ingeniería en Sistemas).
-- **Proyecto de Investigación** para titulación.
+---
 
-## Descripción
-MotorControlApp permite:
-- Arranque suave de 6 pasos (5 aceleraciones) con slider para cada paso (_ARRANQUE 6P_).
-- Arranque continuo rápido (_CONTINUO_).
-- Paro de emergencia (_PARO_).
-- Monitor de velocidad en tiempo real.
+## Características principales
 
-Desarrollada en Kotlin con Jetpack Compose y corutinas, utilizando arquitectura MVVM y `BluetoothService` para comunicación.
+- **Modos de control combinados**: selección directa en `MotorControlScreen` entre Bluetooth, WiFi local, MQTT remoto y asistente de configuración WiFi.
+- **Arranque 6 pasos seguro**: sliders para los seis valores PWM; los comandos se serializan como `arranque6p:39a,114b,...` con verificación en firmware.
+- **Continuo y paro de emergencia**: los botones sólo se habilitan cuando el modo del ESP32 lo permite, evitando estados inconsistentes.
+- **Auto-configuración WiFi**: la app escanea, envía SSID/contraseña y detecta el ESP32 después del reinicio usando `ESP32IntegrationHelper` + `NetworkConfigManagerUpdated`.
+- **Bluetooth con ACK explícitos**: el firmware responde cada comando con JSON (`{"status":"ok","command":"0p"}`) y la app sincroniza estado, velocidad y modo.
+- **MQTT unificado**: tópicos dinámicos basados en `device_name` (`motor/<device>/command`, `/speed`, `/raw`, etc.) para controlar y monitorear el motor.
+- **Documentación integrada**: guías para compilación rápida, plan de implementación y soluciones a errores comunes.
 
-## Protocolo de Comunicación
-- Comandos ASCII individuales para cada paso: `<valor><letra>,` (letras de `a` a `f`).
-- Paro de emergencia: `0p,`.
-- Arranque continuo: `0i,`.
-- Decodificación de velocidad: trama `D0+velocidad`.
+---
 
-## Cronograma de Desarrollo
-| Fecha       | Hito                                                       |
-|-------------|------------------------------------------------------------|
-| 2025-06-20  | Inicio del proyecto: UI básica, permisos Bluetooth.        |
-| 2025-06-21  | Implementación de lectura de velocidad y control continuo. |
-| 2025-06-22  | Primer arranque suave con CSV combinado (encodeArranqueSuave). |
-| 2025-06-23  | Depuración: envío individual de pasos (`encodeStep`) y retardo. |
-| 2025-06-24  | Corrección de paro de emergencia a ASCII (`encodeParo`).   |
-| 2025-06-25  | Separación de `encodeStartRamp`; ajuste de botones UI; README. |
-| 2025-07-02  | Agregado flavor `demo`/`prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación. |
-| 2025-07-03  | Configurado splash screen con `motor_control_background` para logo desvanecido al iniciar. |
-| 2025-07-12  | Restricción de botones de arranque según estado del motor; manejo de BackHandler para navegación y confirmación de salida; actualización de icono de la app. |
-| 2025-08-08  | Optimización de búsqueda Bluetooth: precarga de dispositivos emparejados, detención automática tras 5 segundos y visualización en tiempo real durante el escaneo. |
-|
+## Arquitectura
 
-## Complicaciones y Soluciones
-- **Protocolo incorrecto**: uso inicial de comandos binarios vs ASCII, causando falta de respuesta del MCU. _Solución_: migración a ASCII con sufijos y comas.
-- **Envío combinado CSV**: última etapa no procesada por MCU. _Solución_: enviar cada comando por separado con `delay(100)`.
-- **Orden de comandos**: `0i,` se enviaba en arranque 6P. _Solución_: separar lógica de `sendContinuo()` y `sendArranque6P()`.
-- **Interfaz**: confusión en botones y sliders. _Solución_: eliminar slider de continuo y simplificar botón _CONTINUO_.
-
-## Estructura de Archivos
 ```
-MotorControlApp/
-├─ app/
-│  ├─ src/main/java/com/arranquesuave/motorcontrolapp/
-│  │  ├─ ui/screens/*.kt  
-│  │  ├─ viewmodel/*.kt
-│  │  ├─ services/BluetoothService.kt
-│  │  ├─ utils/Protocol.kt
-│  │  ├─ utils/SessionManager.kt
-│  │  ├─ utils/AuthRepository.kt
-│  └─ AndroidManifest.xml
-└─ README.md
+Android App (Compose)
+ ├─ viewmodel/     → MotorViewModel, WiFiSetupViewModel
+ ├─ controllers/   → BluetoothMotorController, MqttMotorController
+ ├─ services/      → BluetoothService, MqttService
+ ├─ network/       → ESP32ConfigService, ESP32IntegrationHelper
+ └─ ui/screens/    → MotorControlScreen, BluetoothControlScreen, WiFiSetupScreenReal
+
+ESP32 Firmware
+ └─ ESP32_Motor_Controller.ino
+    ├─ HTTP server (scan/configure/status)
+    ├─ MQTT client (broker 177.247.175.4:1885)
+    └─ Control de motor + telemetría
 ```
 
-## Uso
-1. Conceder permisos Bluetooth en primer inicio.
-2. Conectar a dispositivo SPP Bluetooth.
-3. Pulsar **CONTINUO** para arranque rápido.
-4. Ajustar sliders y pulsar **ARRANQUE 6P** para rampa de 6 pasos.
-5. Pulsar **PARO** para detener inmediatamente.
+---
 
-## Notas de Desarrollo
+## Protocolo de comunicación
 
-### Cambios Recientes
-- **UI Refinements**: En `MotorControlScreen`, la paleta de colores se ajustó para coincidir con el diseño Figma (bots, sliders y contenedores suaves). Se eliminó el texto de velocidad en tiempo real para simplificar la interfaz.
-- **Decodificación de Velocidad**: En `Protocol.kt`, `decodeSpeed` se revirtió al decodificado binario original (first byte - VEL_B) para evitar interferencia de datos ASCII.
-- **Persistencia de Sesión**: Creación de `SessionManager` (`SharedPreferences`) que guarda el token de autenticación.
-- **MainActivity**:
-  - Inicializa `SessionManager` y determina `startDestination` según la sesión.
-  - Guarda `token` al iniciar sesión (Login) y lo limpia al hacer logout.
-- **Estructura y Navegación**: El flujo de pantallas ahora respeta la sesión activa al relanzar la app.
-- **Demo Flavor**: Agregados flavors `demo` y `prod` con flag `BuildConfig.NO_AUTH` para demo sin autenticación.
-- **Splash Screen**: Implementado windowBackground con `motor_control_background` para mostrar logo desvanecido durante el arranque.
-- **Reversión de Splash**: Eliminado splash separado; unificado fondo en tema principal.
-- **Pantalla de Control Bluetooth** (`BluetoothControlScreen.kt`):
-    - Muestra estado de conexión y errores en tiempo real.
-    - Añade indicador de progreso (`CircularProgressIndicator`) y botones "Buscar dispositivos" / "Detener búsqueda".
-    - Incluye botón "Buscar nuevamente" para reescanear sin reiniciar la app.
-    - Gestión de cuatro estados: conectado, escaneando, sin dispositivos, listado de dispositivos.
-    - Botón "Desconectar" para cerrar la conexión y limpiar estado.
+### Bluetooth
+- Comandos ASCII terminados en `\n`.
+- Arranque suave: `arranque6p:39a,114b,188c,205d,227e,254f`.
+- Continuo: `0i`.
+- Paro: `0p`.
+- El ESP32 responde con JSON: `{"status":"ok","command":"arranque6p"}`. La app usa la respuesta para habilitar/deshabilitar botones y actualizar el panel.
 
-- **Restricciones de Arranque**: Deshabilita botones de arranque suave/continuo si el motor ya está en ejecución; habilita botón de paro solo cuando el motor esté corriendo.
-- **Manejo de Botón Atrás**: Implementa `BackHandler` en `MainActivity` para navegación entre pantallas Bluetooth, Control, Login y Signup; confirmación de salida con doble pulsación.
-- **Icono de la App**: Cambia el icono de la aplicación por un recurso adaptativo personalizado usando Image Asset Studio.
+### MQTT
+- Broker: `177.247.175.4:1885` (configurable vía `/configure`).
+- Tópicos generados por `buildMqttTopics()`:
+  - Comandos: `motor/<device>/command`
+  - Velocidad deseada: `motor/<device>/speed/set`
+  - Telemetría: `motor/<device>/{speed,state,current,voltage,raw,type}`
+- El ESP32 publica cada segundo y la app actualiza los paneles de estado.
+
+### HTTP (modo configuración)
+- `GET /scan` → redes WiFi disponibles.
+- `POST /configure` → `{ssid,password,mqtt_broker,mqtt_port,device_name}`.
+- `GET /status` → estado completo (WiFi, MQTT, motor, Bluetooth).
+- `POST /restart` → reinicio seguro tras guardar configuración.
+
+---
+
+## Construcción y despliegue
+
+### Prerrequisitos
+- JDK 17 (configurar `JAVA_HOME`).
+- Android Studio Hedgehog+ o `./gradlew assembleDebug` (asegúrate de tener `gradlew` con LF).
+- Arduino IDE 2.x con soporte ESP32 y librerías `ArduinoJson`, `PubSubClient`.
+
+### Pasos
+1. **Firmware**
+   - Abrir `ESP32_Motor_Controller.ino`.
+   - Ajustar pines sólo si tu driver lo requiere (por defecto GPIO2/4/5, sensores 36/39).
+   - Cargar en el ESP32 y abrir Serial Monitor (115200) para verificar logs.
+2. **Aplicación Android**
+   - En Windows/WSL: `./gradlew clean assembleDebug`.
+   - Instalar el APK en tu dispositivo (adb o QR).
+3. **Configuración inicial**
+   - Con la app en modo *WiFi Setup*, conéctate al AP `ESP32-MotorSetup` (`12345678`).
+   - Escanea redes, elige tu WiFi y define el nombre del dispositivo (se usará en los tópicos MQTT).
+   - Tras el reinicio del ESP32, selecciona *WiFi Local* o *Bluetooth* para controlar el motor.
+
+---
+
+## Estado del proyecto
+
+| Área | Estado | Detalles |
+|------|--------|----------|
+| Firmware ESP32 | ✅ Estable | Modo AP + STA, control motor, MQTT/Bluetooth simultáneos con prioridad BT. |
+| Auto-configuración WiFi | ✅ Estable | `WiFiSetupScreenReal` guía al usuario, guarda IP/MQTT en `SharedPreferences`. |
+| Control Bluetooth | ✅ Estable | ACKs JSON, reconexión segura, botón “Desconectar” funcional. |
+| UI Arranque/Paro | ✅ Estable | Botones habilitados según modo reportado, velocidad reseteada tras `0p`. |
+| Documentación | ✅ Actualizada | Guías en `*.md` cubren compilación, plan y troubleshooting. |
+| Próximo paso | ℹ️ Opcional | Añadir gráficas de corriente/voltaje y registro histórico via MQTT. |
+
+---
+
+## Cambios recientes relevantes
+
+- Reestablecido protocolo `arranque6p:<valor+letra>` y validador `extractStepValue()` en el firmware.
+- Nuevo búfer ASCII en `BluetoothMotorController` para procesar ACKs multi-paquete y limpieza del socket en `BluetoothService.close()`.
+- `MotorViewModel` sincroniza `motorRunning`/velocidad según el modo real y `MotorControlScreen` desbloquea botones inmediatamente después de un paro.
+- `ConnectionPanel` y `BluetoothControlScreen` usan `viewModel.disconnectDevice()` para cerrar sesión y limpiar la UI.
+- Documentación revisada (este README, guías y plan) para reflejar el estado actual del proyecto.
+
+---
 
 ## Capturas
 
-<!-- Inserta aquí capturas de pantalla de la app -->
+Coloca tus capturas en `docs/screenshots/` y referencia aquí:
 
-Añade tus capturas en `docs/screenshots/` y referencia aquí:
+![Motor Control](docs/screenshots/motor_control.png)
+![Bluetooth Control](docs/screenshots/bluetooth_control.png)
 
-![Pantalla de Motor Control](docs/screenshots/motor_control.png)
-![Pantalla de Splash](docs/screenshots/splash.png)
-<!-- Otras capturas -->
+---
 
-## Ejemplos de Errores y Soluciones
+## Support
 
-<!-- Inserta aquí capturas de errores detectados y descripción de la solución -->
-- Agregar fechas y detalles de nuevas funcionalidades.
-- Documentar pruebas en hardware real y lecturas.
-- Registrar errores detectados y pasos de solución.
+- Logs Android: `BluetoothMotorCtrl`, `MqttService`, `ESP32Integration`.
+- Logs ESP32: Monitor serie 115200.
+- Problemas comunes y soluciones rápidas en `SOLUCION_COMPILACION.md`.
 
-*Este documento se actualizará progresivamente con el avance del proyecto.*
+¡El sistema está listo para demo y pruebas finales! 🚀

@@ -1,145 +1,91 @@
-# 🚀 Guía Rápida para Compilar tu Motor Control App
+# ⚡ Guía rápida de compilación y despliegue
 
-## ✅ Problemas Solucionados
-
-### **Aplicación Android:**
-- ❌ Eliminado `ESP32ConfigHelper.kt` duplicado
-- ❌ Movido directorio `examples/` problemático  
-- ❌ Movido directorio `testing/` problemático
-- ✅ Simplificado `MotorViewModel.kt` 
-- ✅ Configuración broker profesor: `177.247.175.4:1885`
-
-### **Código ESP32:**
-- ❌ Cambiado `A0, A1` por `GPIO36, GPIO39` 
-- ✅ Pines correctos para ESP32
-- ✅ Broker del profesor configurado por defecto
+Esta guía resume los pasos esenciales para volver a compilar la app, flashear el ESP32 y dejar todo funcionando con el broker del profesor.
 
 ---
 
-## 🔧 Compilar la Aplicación
+## 1. Preparar el entorno
 
-### **Paso 1: Limpiar proyecto**
+1. **Windows/WSL**
+   ```bash
+   cd /mnt/c/Users/LaBendiChao/Desktop/MotorContorlApp
+   dos2unix gradlew        # (una vez) evita el error 'sh\r'
+   export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+   export PATH="$JAVA_HOME/bin:$PATH"
+   ```
+2. **Requisitos Android**
+   - Android Studio con SDK 34
+   - Dispositivo físico con Android 10+ (Bluetooth clásico)
+3. **Arduino IDE**
+   - Paquete ESP32 3.x
+   - Librerías: `PubSubClient`, `ArduinoJson`
+
+---
+
+## 2. Compilar la aplicación Android
+
 ```bash
-cd C:\Users\LaBendiChao\Desktop\MotorContorlApp
-.\gradlew clean
+./gradlew clean assembleDebug        # empaqueta app completa
+# o solo demo sin auth
+./gradlew assembleDemo
 ```
+El APK queda en `app/build/outputs/apk/<flavor>/`. Instálalo con `adb install -r ...apk`.
 
-### **Paso 2: Compilar**
-```bash
-.\gradlew assembleDebug
-```
-
-Si hay errores, prueba:
-```bash
-.\gradlew assembleDemo
-```
+**Errores comunes**
+- `JAVA_HOME is not set` → define la variable antes de ejecutar Gradle.
+- `Permission denied` → asegúrate de que `gradlew` tenga permisos (`chmod +x gradlew`).
+- Kotlin “Unresolved reference” → sincroniza el proyecto (los archivos `ESP32Models.kt`, `NetworkConfigManagerUpdated.kt`, etc. ya están incluidos).
 
 ---
 
-## 📱 Subir Código ESP32
+## 3. Flashear el ESP32
 
-### **Paso 1: Abrir Arduino IDE**
-1. Abre `ESP32_Motor_Controller.ino`
-2. Verifica que tengas seleccionado:
-   - Board: "ESP32 Dev Module"
-   - Port: Tu puerto COM
+1. Conecta la tarjeta y selecciona el puerto COM correcto.
+2. Abre `ESP32_Motor_Controller.ino` y pulsa *Upload*.
+3. Verifica que en Serial Monitor aparezca la IP del AP y los logs de MQTT/Bluetooth.
 
-### **Paso 2: Cargar código**
-1. Presiona el botón de upload
-2. Si hay error de compilación, instala librerías:
-   - `WiFi` (ya incluida)
-   - `WebServer` (ya incluida) 
-   - `PubSubClient` - Para MQTT
-   - `ArduinoJson` - Para JSON
-
-### **Instalar librerías faltantes:**
-```
-Tools → Manage Libraries → Buscar:
-- PubSubClient (by Nick O'Leary)
-- ArduinoJson (by Benoit Blanchon)
-```
+Si la compilación falla por pines analógicos (`A0/A1`), asegúrate de estar usando la versión actual donde se definen como `GPIO36` y `GPIO39`.
 
 ---
 
-## 🎯 Pines ESP32 Actualizados
+## 4. Primer uso
 
-```cpp
-// Pines correctos para ESP32
-#define MOTOR_ENABLE_PIN 2      // GPIO2
-#define MOTOR_DIR_PIN 4         // GPIO4  
-#define MOTOR_PWM_PIN 5         // GPIO5
-#define CURRENT_SENSOR_PIN 36   // GPIO36 (ADC1_0)
-#define VOLTAGE_SENSOR_PIN 39   // GPIO39 (ADC1_3)
-```
-
-## 🔌 Conexión Motor al ESP32
-
-```
-Motor Driver → ESP32
-VCC         → 3.3V/5V
-GND         → GND
-IN1         → GPIO2 (ENABLE)
-IN2         → GPIO4 (DIRECTION)
-PWM         → GPIO5 (SPEED)
-
-Sensores → ESP32
-Current     → GPIO36
-Voltage     → GPIO39
-```
+1. **Modo Bluetooth**
+   - Empareja el ESP32 (PIN `1234`).
+   - En la app, ve a *Bluetooth Control* y pulsa “Buscar dispositivos”.
+2. **Modo WiFi Setup**
+   - Conéctate al AP `ESP32-MotorSetup` (`12345678`).
+   - Sigue el asistente para enviar tu SSID/contraseña.
+3. **Modo WiFi Local / MQTT Remote**
+   - Después de configurar WiFi, simplemente pulsa “Connect MQTT”.
 
 ---
 
-## 🚀 Primer Uso
+## 5. Validaciones rápidas
 
-### **1. Configurar ESP32:**
-1. Carga el código en ESP32
-2. ESP32 creará WiFi "ESP32-MotorSetup" 
-3. Conéctate desde tu teléfono (password: "12345678")
-4. Abre navegador: `http://192.168.4.1`
-5. Configura tu WiFi doméstico
-
-### **2. Usar la aplicación:**
-1. Instala la app en tu teléfono
-2. Selecciona modo "Bluetooth" para pruebas
-3. O selecciona "WiFi Local" para usar MQTT
-4. Conecta y controla tu motor
+| Acción | Herramienta | Confirmación |
+|--------|-------------|--------------|
+| Arranque 6P | App + Serial Monitor | `Bluetooth ACK -> {"command":"arranque6p"}` |
+| Paro | App | Botones de arranque se vuelven a habilitar. |
+| MQTT | Logs app (`MqttService`) | `MQTT connection established successfully`. |
+| HTTP | Navegador `http://192.168.4.1/status` | JSON con estado WiFi/Bluetooth. |
 
 ---
 
-## 🎮 Controles Disponibles
+## 6. Problemas resueltos recientemente
 
-| Comando | Función | Uso |
-|---------|---------|-----|
-| **Arranque 6P** | Arranque suave 6 pasos | Configura sliders y presiona |
-| **Continuo** | Arranque directo | Velocidad máxima inmediata |
-| **Paro** | Paro de emergencia | Detiene motor instantáneamente |
-
----
-
-## 🔍 Si hay errores:
-
-### **Android - Error de compilación:**
-```bash
-.\gradlew clean
-.\gradlew build --stacktrace
-```
-
-### **ESP32 - Error "A1 not declared":**
-- Verifica que uses la versión corregida del código
-- Los pines deben ser `GPIO36` y `GPIO39`, no `A0` y `A1`
-
-### **MQTT no conecta:**
-- Verifica que tienes internet
-- El broker `177.247.175.4:1885` debe estar accesible  
-- Revisa que no esté bloqueado por firewall
+- Eliminado conflicto de líneas CRLF en `gradlew` que impedía ejecutar comandos en WSL.
+- Se añadieron los modelos (`ESP32Status`, `WiFiCredentials`) faltantes para compilar el módulo de integración.
+- El botón “Desconectar” ahora cierra correctamente el socket Bluetooth y limpia el estado de la UI.
+- La UI bloquea/desbloquea los botones de arranque según el modo reportado por el ESP32, evitando comandos duplicados.
 
 ---
 
-## ✅ Estado Final
+## 7. Checklist antes de una demo
 
-🟢 **Aplicación Android**: Lista para compilar  
-🟢 **Código ESP32**: Pines corregidos  
-🟢 **Broker MQTT**: Configurado para profesor  
-🟢 **Archivos problemáticos**: Removidos  
+- [ ] ESP32 flasheado y conectado al broker del profesor.
+- [ ] App instalada en el teléfono con permisos Bluetooth y ubicación concedidos.
+- [ ] Prueba rápida: Arranque 6P → Paro → Arranque Continuo (en ambos modos, BT y WiFi).
+- [ ] Capturas actualizadas en `docs/screenshots/` si hubo cambios visuales.
 
-¡Tu sistema está listo para funcionar! 🎉
+Con esto tienes todo listo para compilar y mostrar el proyecto sin contratiempos. 💪

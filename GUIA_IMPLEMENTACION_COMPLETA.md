@@ -1,284 +1,110 @@
-# 🚀 GUÍA COMPLETA DE IMPLEMENTACIÓN ESP32 + ANDROID
+# 🚀 Guía completa de implementación ESP32 + Android
 
-## 📋 RESUMEN EJECUTIVO
-
-Has recibido un sistema completo de configuración WiFi/Bluetooth para tu proyecto de tesis del Instituto Tecnológico de Morelia. Este sistema permite que tu aplicación Android configure automáticamente un ESP32 para controlar motores de CD con arranque suave.
+Este documento resume el flujo actual del proyecto: firmware `ESP32_Motor_Controller.ino`, aplicación Android `MotorControlApp` y la integración WiFi/MQTT/Bluetooth.
 
 ---
 
-## 📁 ARCHIVOS CREADOS
+## 1. Requisitos
 
-### **ESP32 (Hardware)**
-- `ESP32_WiFi_Config_Complete.ino` - Código completo para ESP32
-- `ESP32_DOCUMENTACION.md` - Documentación técnica completa
-
-### **Android (Software)**
-- `ESP32IntegrationHelper.kt` - Helper optimizado para integración
-- `ESP32IntegrationTester.kt` - Suite de testing completa
-
----
-
-## 🎯 PASO A PASO - IMPLEMENTACIÓN
-
-### **FASE 1: CONFIGURAR ESP32** ⚡
-
-#### 1.1 Preparar Arduino IDE
-```bash
-# Instalar librerías necesarias:
-- ArduinoJson (versión 7.x)
-- ESP32 Board Package (versión 3.x)
-```
-
-#### 1.2 Subir código al ESP32
-```cpp
-// Abrir: ESP32_WiFi_Config_Complete.ino
-// Seleccionar: ESP32 Dev Module
-// Subir código al ESP32
-```
-
-#### 1.3 Verificar funcionamiento
-```bash
-# Abrir Serial Monitor (115200 baud)
-# Deberías ver:
-🚀 ESP32 MOTOR CONTROL - INICIANDO...
-✅ AP iniciado: ESP32-MotorConfig
-🌐 IP de configuración: 192.168.4.1
-📱 Bluetooth iniciado: ESP32-MotorControl
-✅ Inicialización completada
-```
-
-### **FASE 2: INTEGRAR CON ANDROID** 📱
-
-#### 2.1 Añadir archivos al proyecto Android
-```bash
-# Copiar a tu proyecto:
-- ESP32IntegrationHelper.kt → /network/
-- ESP32IntegrationTester.kt → /testing/
-```
-
-#### 2.2 Actualizar imports donde sea necesario
-```kotlin
-// En tus ViewModels o Activities:
-import com.arranquesuave.motorcontrolapp.network.ESP32IntegrationHelper
-import com.arranquesuave.motorcontrolapp.testing.ESP32IntegrationTester
-```
-
-#### 2.3 Implementar en tu ViewModel
-```kotlin
-class WiFiSetupViewModel(application: Application) : AndroidViewModel(application) {
-    
-    private val integrationHelper = ESP32IntegrationHelper(application)
-    
-    // Usar el helper para configuración automática
-    fun startAutoSetup() {
-        viewModelScope.launch {
-            val result = integrationHelper.autoSetupESP32()
-            // Manejar resultado...
-        }
-    }
-    
-    // Configurar WiFi con credenciales
-    fun configureWiFi(ssid: String, password: String) {
-        viewModelScope.launch {
-            val result = integrationHelper.configureESP32WiFi(ssid, password)
-            // Manejar resultado...
-        }
-    }
-}
-```
-
-### **FASE 3: TESTING COMPLETO** 🧪
-
-#### 3.1 Ejecutar tests de integración
-```kotlin
-// En tu Activity o Fragment:
-private fun runIntegrationTests() {
-    lifecycleScope.launch {
-        val tester = ESP32IntegrationTester(this@MainActivity)
-        val results = tester.runFullTest()
-        
-        // Revisar resultados
-        Log.d("Testing", "Tests exitosos: ${results.successCount}")
-        Log.d("Testing", "Tests fallidos: ${results.failureCount}")
-        
-        tester.cleanup()
-    }
-}
-```
-
-#### 3.2 Test rápido de conectividad
-```kotlin
-// Test rápido para verificar si ESP32 está disponible:
-private fun quickTest() {
-    lifecycleScope.launch {
-        val tester = ESP32IntegrationTester(this@MainActivity)
-        val isAvailable = tester.quickConnectivityTest()
-        
-        if (isAvailable) {
-            Log.d("ESP32", "✅ ESP32 disponible")
-        } else {
-            Log.d("ESP32", "❌ ESP32 no disponible")
-        }
-    }
-}
-```
+| Componente | Versión recomendada |
+|------------|---------------------|
+| Arduino IDE | 2.3+ con soporte ESP32 (core 3.x) |
+| Librerías ESP32 | `WebServer`, `WiFi`, `EEPROM`, `PubSubClient`, `ArduinoJson 7.x` |
+| Android Studio | Hedgehog/Koala con JDK 17 |
+| Hardware | ESP32 DEVKIT, driver de motor, sensor de corriente/voltaje |
+| Broker MQTT | `177.247.175.4:1885` (profesor) |
 
 ---
 
-## 🔧 FLUJO DE CONFIGURACIÓN AUTOMÁTICO
+## 2. Firmware ESP32
 
-### **Escenario 1: Primera configuración**
-```
-1. 📱 App inicia → 🔍 Busca ESP32 en red local
-2. ❌ No encuentra → 🔍 Busca ESP32 en modo configuración 
-3. ✅ Encuentra ESP32-MotorConfig → 📝 Solicita credenciales WiFi
-4. 👤 Usuario ingresa WiFi → 📡 App envía configuración al ESP32
-5. 🔄 ESP32 se reinicia → 📡 Se conecta a WiFi del usuario
-6. 🔍 App busca ESP32 en red local → ✅ Lo encuentra y configura
-```
+1. Abre `ESP32_Motor_Controller.ino`.
+2. Ajusta pines sólo si tu placa requiere cambios (por defecto GPIO2/4/5, ADC36/39).
+3. Carga el sketch y observa en Serial Monitor:
+   ```
+   === ESP32 Motor Controller Starting ===
+   AP SSID: ESP32-MotorSetup
+   Web server started
+   ```
+4. El firmware habilita simultáneamente:
+   - **Modo configuración** (AP + servidor HTTP) para `/scan`, `/configure`, `/status`.
+   - **Modo operativo** (WiFi STA + MQTT) con tópicos `motor/<device>/...`.
+   - **Bluetooth SPP** con PIN fijo `1234`; cada comando responde con JSON (`Bluetooth ACK -> {...}`).
 
-### **Escenario 2: ESP32 ya configurado**
-```
-1. 📱 App inicia → 🔍 Busca ESP32 en red local
-2. ✅ Lo encuentra → 📋 Carga configuración guardada
-3. ✅ Conexión lista para usar
-```
-
-### **Escenario 3: Configuración manual**
-```
-1. 📱 Usuario selecciona "Configuración Manual"
-2. 📝 Ingresa IP del ESP32 (ej: 192.168.1.100)
-3. 🔌 App prueba conexión → ✅ Guarda configuración
-```
+### Comandos aceptados
+- `arranque6p:<valora>,<valorb>,...` (hasta 6 pasos).
+- `0i` → continuo.
+- `0p` → paro.
+- `speed=120` → PWM directo.
 
 ---
 
-## 🎛️ ENDPOINTS ESP32 DISPONIBLES
+## 3. App Android
 
-| Endpoint | Método | Descripción | Ejemplo |
-|----------|--------|-------------|---------|
-| `/ping` | GET | Verificar conectividad | `GET http://192.168.4.1/ping` |
-| `/status` | GET | Estado del ESP32 | `GET http://192.168.4.1/status` |
-| `/configure` | POST | Configurar WiFi | `POST {"ssid":"MiRed","password":"123"}` |
-| `/restart` | POST | Reiniciar ESP32 | `POST http://192.168.4.1/restart` |
-| `/reset` | POST | Borrar configuración | `POST http://192.168.4.1/reset` |
+### Estructura clave
 
----
+- `MotorViewModel.kt` coordina los modos y sincroniza el estado del motor.
+- `WiFiSetupScreenReal.kt` guía al usuario durante la primera configuración.
+- `BluetoothMotorController` / `MqttMotorController` implementan la interfaz `MotorController`.
+- `ESP32ConfigService.kt` encapsula los endpoints HTTP.
 
-## 🔍 DEBUGGING Y RESOLUCIÓN DE PROBLEMAS
+### Flujo de conexión
 
-### **Problema: ESP32 no aparece en WiFi**
-```bash
-Solución:
-1. Verificar LED del ESP32 (debe parpadear rápido)
-2. Buscar red "ESP32-MotorConfig" en configuración WiFi del celular
-3. Si no aparece: Reiniciar ESP32 y verificar Serial Monitor
+```
+MotorControlScreen
+ ├─ Bluetooth: usa BluetoothService + ACKs JSON
+ ├─ WiFi Local / MQTT Remote: usa MqttService (HiveMQ client)
+ └─ WiFi Setup: lanza asistente que escanea redes y envía credenciales
 ```
 
-### **Problema: App no encuentra ESP32**
-```bash
-Solución:
-1. Verificar que celular esté conectado a WiFi 2.4GHz
-2. Probar configuración manual con IP específica
-3. Ejecutar tests de integración para diagnóstico
-```
-
-### **Problema: ESP32 se conecta pero app no lo detecta**
-```bash
-Solución:
-1. Verificar firewall/router no bloquee conexiones
-2. Probar desde navegador: http://IP_ESP32
-3. Usar ESP32IntegrationTester.testSpecificIP("192.168.1.XXX")
-```
+### Reglas de UI
+- Botones Arranque 6P y Continuo se habilitan cuando `motorMode` es `paro/stop/stopped`.
+- Botón Paro sólo se habilita si el modo reporta ejecución.
+- El panel “Conexión” muestra IP, modo, velocidad y permite desconectar/controlar según el modo seleccionado.
 
 ---
 
-## 📊 COMANDOS DE DEBUGGING
+## 4. Configuración WiFi paso a paso
 
-### **ESP32 (Serial Monitor)**
-```bash
-info      # Información completa del sistema
-status    # Estado rápido (WiFi, memoria)
-reset     # Borrar configuración WiFi
-restart   # Reiniciar ESP32
-```
-
-### **Android (Logcat)**
-```bash
-# Filtrar logs de ESP32:
-adb logcat | grep "ESP32"
-
-# Ver tests de integración:
-adb logcat | grep "ESP32Tester"
-
-# Ver estado de configuración:
-adb logcat | grep "WiFiSetup"
-```
+1. Enciende el ESP32 recién flasheado (modo AP `ESP32-MotorSetup`).
+2. Abre la app → modo *WiFi Setup*.
+3. Sigue el asistente:
+   - Detecta si ya hay un ESP32 configurado en la red local.
+   - Si no, se conecta automáticamente al AP y consulta `/status`.
+   - Solicita SSID y contraseña de tu red doméstica (y opcionalmente `device_name`).
+4. Tras enviar `/configure`, el ESP32 reinicia; la app espera 8–15 s y busca la nueva IP.
+5. Si lo encuentra, guarda la IP/MQTT en `NetworkConfigManagerUpdated` y permite cambiar al modo *WiFi Local*.
 
 ---
 
-## 🎯 PRÓXIMOS PASOS RECOMENDADOS
+## 5. Pruebas sugeridas
 
-### **1. Testing Básico (30 minutos)**
-- [ ] Subir código al ESP32
-- [ ] Verificar que inicia en modo configuración
-- [ ] Probar conexión desde navegador a `192.168.4.1`
-- [ ] Ejecutar `ESP32IntegrationTester.quickConnectivityTest()`
-
-### **2. Integración Android (1 hora)**
-- [ ] Integrar `ESP32IntegrationHelper` en tu ViewModel
-- [ ] Probar configuración WiFi automática
-- [ ] Verificar detección en red local
-- [ ] Probar configuración manual de IP
-
-### **3. Testing Completo (30 minutos)**
-- [ ] Ejecutar `ESP32IntegrationTester.runFullTest()`
-- [ ] Verificar todos los tests pasan
-- [ ] Probar recovery automático (desconectar/reconectar WiFi)
-
-### **4. Integración Final (2 horas)**
-- [ ] Crear pantalla de control con sliders
-- [ ] Implementar comandos de motor
-- [ ] Testing end-to-end completo
-- [ ] Documentación para demostración de tesis
+| Prueba | Herramienta | Resultado esperado |
+|--------|-------------|--------------------|
+| Arranque 6P por Bluetooth | App + Serial Monitor | `Processing motor command: arranque6p:...` y botones desactivados hasta `0p`. |
+| Paro → nuevo arranque | App | Tras `Bluetooth ACK -> {"command":"0p"}` los botones de arranque vuelven a habilitarse. |
+| MQTT Local | App (WiFi Local) + broker | Panel muestra IP/SSID, velocidad y modo actualizados cada segundo. |
+| Desconectar Bluetooth | Panel o pantalla Bluetooth | Estado pasa a “Disconnected” y se liberan los botones. |
+| WiFi Setup | WiFiSetupScreenReal | Flujo completo con escaneo, envío de credenciales y detección en red. |
 
 ---
 
-## 📞 CONTACTO Y SOPORTE
+## 6. Troubleshooting
 
-**Proyecto**: Control Motor ESP32 - Instituto Tecnológico de Morelia  
-**Fecha**: Noviembre 2025  
-**Versión**: 1.0.0
-
-### **Recursos Adicionales**
-- `ESP32_DOCUMENTACION.md` - Documentación técnica completa
-- `ESP32IntegrationTester.kt` - Suite de testing con ejemplos
-- Logs del ESP32 - Serial Monitor a 115200 baud
-- Logs de Android - Filtro por "ESP32" en Logcat
+| Problema | Causa probable | Solución |
+|----------|----------------|----------|
+| El APK no compila en WSL | `gradlew` con CRLF o sin `JAVA_HOME` | Ejecuta `dos2unix gradlew` y configura JDK 17 (`export JAVA_HOME=/usr/lib/jvm/...`). |
+| No puedo desconectar BT | Socket seguía abierto | Actualiza a la versión actual (se cierra el socket antes de cancelar el lector). |
+| Botones quedan bloqueados en “Paro” | ACK `0p` no llegaba a la app | Revisa que los comandos terminen en `\n` y que el log muestre `Bluetooth ACK -> ...`. |
+| No aparece el ESP32 en WiFi Local | IP guardada desactualizada | Usa “Verificar ESP32” o ejecuta nuevamente el asistente WiFi. |
+| MQTT sin conexión | Firewall o sin internet | Intenta con datos móviles o verifica que el puerto 1885 esté abierto. |
 
 ---
 
-## ✅ CHECKLIST DE VERIFICACIÓN
+## 7. Próximos pasos opcionales
 
-### **ESP32 Hardware**
-- [ ] LED integrado parpadea (modo configuración) o está fijo (operativo)
-- [ ] Serial Monitor muestra logs sin errores
-- [ ] Red "ESP32-MotorConfig" visible en WiFi del celular
-- [ ] Responde en `http://192.168.4.1` desde navegador
+- Registrar corriente/voltaje en gráficos históricos utilizando los tópicos `motor/<device>/raw`.
+- Añadir recordatorios de mantenimiento en la app (horas de uso, ciclos de arranque).
+- Implementar OTA para el ESP32 aprovechando el servidor web ya levantado.
 
-### **Android App**
-- [ ] Compila sin errores
-- [ ] `ESP32IntegrationHelper` importado correctamente
-- [ ] Tests de integración ejecutan sin crashes
-- [ ] Configuración WiFi funciona
-- [ ] Detección automática funciona
-
-### **Integración Completa**
-- [ ] ESP32 se conecta a WiFi del celular
-- [ ] App encuentra ESP32 en red local
-- [ ] Configuración se persiste entre reinicios
-- [ ] Recovery automático funciona
-
----
-
-**🎉 ¡Listo! Tienes un sistema completo de configuración ESP32/Android para tu proyecto de tesis.**
+Con esta guía puedes desplegar todo el sistema desde cero y tener evidencia clara para tus avances académicos. Guarda logs y capturas en la carpeta `docs/` cuando hagas nuevas pruebas.
