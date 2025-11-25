@@ -12,23 +12,23 @@ object Protocol {
     /** Codifica un paso: valor + letra a-f */
     fun encodeStep(index: Int, v: Int): ByteArray = "${v.coerceIn(0,254)}${('a'+index)},".toByteArray(Charsets.UTF_8)
     /** Codifica paro en binario: PARO */
-    /** Codifica paro ASCII: "0p" */
-    fun encodeParo(): ByteArray = "0p".toByteArray(Charsets.UTF_8)
+    /** Codifica paro ASCII: "0p," (formato del profesor) */
+    fun encodeParo(): ByteArray = "0p,".toByteArray(Charsets.UTF_8)
 
 
-    /** Codifica arranque suave ASCII: "v0a,v1b,...,v5f" */
+    /** Codifica arranque suave ASCII: "v0a,v1b,...,v5f," (formato del profesor) */
     fun encodeArranqueSuave(values: List<Int>): ByteArray {
         val suffixes = charArrayOf('a', 'b', 'c', 'd', 'e', 'f')
         val payload = values.take(6)
             .mapIndexed { index, value ->
-                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }}"
+                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }},"
             }
-            .joinToString(",")
-        return "arranque6p:$payload".toByteArray(Charsets.UTF_8)
+            .joinToString("")
+        return payload.toByteArray(Charsets.UTF_8)
     }
 
-    /** Codifica arranque continuo ASCII: "0i," */
-    fun encodeStartRamp(): ByteArray = "0i".toByteArray(Charsets.UTF_8)
+    /** Codifica arranque continuo ASCII: "0i," (formato del profesor) */
+    fun encodeStartRamp(): ByteArray = "0i,".toByteArray(Charsets.UTF_8)
 
     fun decodeSpeed(data: ByteArray): Int? {
         // Decode binary speed packet: first byte = VEL_B + value

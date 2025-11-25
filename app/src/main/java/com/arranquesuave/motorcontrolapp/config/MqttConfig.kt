@@ -76,19 +76,19 @@ object MqttConfig {
         fun type(deviceId: String) = "motor/$deviceId/type"
     }
     
-    // ✅ COMANDOS MQTT
+    // ✅ COMANDOS MQTT (Formato del profesor)
     object Commands {
         private val suffixes = listOf('a', 'b', 'c', 'd', 'e', 'f')
-        
+
         fun arranqueSuavePayload(values: List<Int>): String {
             return values.take(6).mapIndexed { index, value ->
-                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }}"
-            }.joinToString(",")
+                "${value.coerceIn(0, 254)}${suffixes.getOrElse(index) { 'f' }},"
+            }.joinToString("")
         }
-        
-        fun continuoPayload(): String = "0i"
-        
-        fun paroPayload(): String = "0p"
+
+        fun continuoPayload(): String = "0i,"
+
+        fun paroPayload(): String = "0p,"
     }
     
     // ✅ UTILIDADES

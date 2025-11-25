@@ -1,11 +1,5 @@
-/*
- * ======================================================================
- * CÓDIGO ESP32 PARA MOTOR CONTROL APP
- * ======================================================================
- * Este código debe cargarse en tu ESP32 para que funcione con la app Android
- * Incluye: WiFi setup, MQTT, control de motor, endpoints HTTP
- * ======================================================================
- */
+// ESP32 Motor Controller - SSR Version
+// GPIO2 --> SSR Signal Pin
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -18,20 +12,12 @@
 #include <esp_gap_bt_api.h>
 #endif
 
-// ======================================================================
-// CONFIGURACIÓN
-// ======================================================================
-
-// WiFi Configuration Mode
 #define AP_SSID "ESP32-MotorSetup"
 #define AP_PASSWORD "12345678"
 
-// Motor Control Pins - ESP32 GPIO
-#define MOTOR_ENABLE_PIN 2
-#define MOTOR_DIR_PIN 4
-#define MOTOR_PWM_PIN 5
-#define CURRENT_SENSOR_PIN 36  // GPIO36 (ADC1_0)
-#define VOLTAGE_SENSOR_PIN 39  // GPIO39 (ADC1_3)
+#define SSR_SIGNAL_PIN 2
+#define CURRENT_SENSOR_PIN 36
+#define VOLTAGE_SENSOR_PIN 39
 
 // EEPROM Addresses
 #define EEPROM_SIZE 512
@@ -64,7 +50,6 @@ ControlChannel activeControl = CONTROL_WIFI;
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
 void handleBluetooth();
-void processBluetoothCommand(String command);
 #endif
 
 // Tiempos de conexión WiFi
@@ -194,6 +179,9 @@ void setup() {
 // ======================================================================
 
 void loop() {
+  // DEBUG: Verificar cambios inesperados en el GPIO
+  // Watchdog ya no es necesario con analogWrite() porque genera señal PWM continua
+
   server.handleClient();
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
@@ -201,24 +189,24 @@ void loop() {
     handleBluetooth();
   }
 #endif
-  
+
   if (WiFi.status() == WL_CONNECTED) {
     if (!mqtt.connected()) {
       reconnectMQTT();
     }
     mqtt.loop();
   }
-  
+
   // Leer sensores
   readSensors();
-  
+
   // Publicar telemetría cada 1 segundo
   static unsigned long lastTelemetry = 0;
   if (millis() - lastTelemetry > 1000) {
     publishTelemetry();
     lastTelemetry = millis();
   }
-  
+
   delay(50);
 }
 
@@ -227,16 +215,9 @@ void loop() {
 // ======================================================================
 
 void setupMotorPins() {
-  pinMode(MOTOR_ENABLE_PIN, OUTPUT);
-  pinMode(MOTOR_DIR_PIN, OUTPUT);
-  pinMode(MOTOR_PWM_PIN, OUTPUT);
-  
-  // Motor apagado por defecto
-  digitalWrite(MOTOR_ENABLE_PIN, LOW);
-  digitalWrite(MOTOR_DIR_PIN, LOW);
-  analogWrite(MOTOR_PWM_PIN, 0);
-  
-  Serial.println("Motor pins configured");
+  pinMode(SSR_SIGNAL_PIN, OUTPUT);
+  analogWrite(SSR_SIGNAL_PIN, 0);
+  Serial.println("SSR configured on GPIO2");
 }
 
 // ======================================================================
@@ -512,18 +493,21 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  String message = "";
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  
-  Serial.println("MQTT received [" + String(topic) + "]: " + message);
-  
-  motorState.lastCommand = message;
-  
+  Serial.print("MQTT received [" + String(topic) + "]: ");
+
   if (String(topic) == mqttTopicCommand) {
-    handleMotorCommand(message);
+    for (int i = 0; i < length; i++) {
+      char c = (char)payload[i];
+      Serial.print(c);
+      processCharacter(c);
+    }
+    Serial.println();
   } else if (String(topic) == mqttTopicSpeedCommand) {
+    String message = "";
+    for (int i = 0; i < length; i++) {
+      message += (char)payload[i];
+    }
+    motorState.lastCommand = message;
     if (rampInProgress) {
       Serial.println("Speed command ignored during ramp");
       return;
@@ -531,7 +515,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     int speed = message.toInt();
     setMotorSpeed(speed);
   } else if (String(topic) == mqttTopicType) {
-    motorState.mode = message;
+    String typeMessage = "";
+    for (int i = 0; i < length; i++) {
+      typeMessage += (char)payload[i];
+    }
+    motorState.mode = typeMessage;
   }
 }
 
@@ -615,159 +603,120 @@ bool extractStepValue(String token, int& outValue) {
   return true;
 }
 
-void handleMotorCommand(String command) {
-  Serial.println("Processing motor command: " + command);
+void processCharacter(char data) {
+  static String buffer = "";
 
-  String trimmed = command;
-  trimmed.trim();
-  String lower = trimmed;
-  lower.toLowerCase();
-  
-  if (lower == "0p" || lower == "p" || lower == "paro" || lower == "stop") {
-    cancelRamp = true;
-    stopMotor();
-    motorState.mode = "stopped";
-    publishTelemetry();
-  } else if (lower == "0i" || lower == "i" || lower == "continuo") {
-    cancelRamp = false;
-    rampInProgress = false;
-    startContinuousMode();
-  } else if (lower.startsWith("arranque6p:")) {
-    handleArranque6P(trimmed);
-  } else if (isArranquePayload(trimmed)) {
-    handleArranque6P("arranque6p:" + trimmed);
-  } else if (lower == "start") {
-    startMotor();
-  } else {
-    Serial.println("Unknown command: " + command);
-  }
-}
+  if (data == ',') {
+    if (buffer.length() > 1) {
+      Serial.println("Command: " + buffer);
 
-void stopMotor() {
-  digitalWrite(MOTOR_ENABLE_PIN, LOW);
-  analogWrite(MOTOR_PWM_PIN, 0);
-  
-  motorState.running = false;
-  motorState.speed = 0;
-  motorState.mode = "stopped";
-  
-  Serial.println("Motor stopped");
-  publishTelemetry();
-}
+      int velocidad = buffer.toInt();
 
-void startMotor() {
-  cancelRamp = false;
-  digitalWrite(MOTOR_ENABLE_PIN, HIGH);
-  
-  motorState.running = true;
-  motorState.mode = "running";
-  
-  Serial.println("Motor started");
-  publishTelemetry();
-}
+      if (velocidad >= 0 && velocidad < 255) {
 
-void startContinuousMode() {
-  cancelRamp = false;
-  rampInProgress = false;
-  startMotor();
-  setMotorSpeed(255); // Velocidad máxima
-  motorState.mode = "continuo";
-  
-  Serial.println("Continuous mode activated");
-}
+        if (buffer.indexOf('p') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, 0);
+          Serial.print("Velocidad = ");
+          Serial.println(0);
+          delay(15);
+          motorState.running = false;
+          motorState.speed = 0;
+          Serial.println("PARO DE EMERGENCIA");
+          publishTelemetry();
+        }
 
-void handleArranque6P(String command) {
-  // Formato: "arranque6p:10,20,30,40,50,60"
-  int colonIndex = command.indexOf(':');
-  if (colonIndex == -1) return;
-  
-  String values = command.substring(colonIndex + 1);
-  
-  cancelRamp = false;
-  rampInProgress = true;
-  startMotor();
-  motorState.mode = "arranque6p";
-  
-  Serial.println("Starting 6-step soft start: " + values);
-  
-  // Procesar arranque suave (implementar según tus necesidades)
-  // Ejemplo básico:
-  int stepSpeeds[6] = {0};
-  int stepCount = 0;
-  String remaining = values;
-  while (remaining.length() > 0 && stepCount < 6) {
-    int commaIndex = remaining.indexOf(',');
-    String token = (commaIndex == -1) ? remaining : remaining.substring(0, commaIndex);
-    token.trim();
-    int parsedValue = 0;
-    if (!extractStepValue(token, parsedValue)) {
-      Serial.println("Invalid step token: " + token);
-      return;
-    }
-    stepSpeeds[stepCount++] = parsedValue;
-    if (commaIndex == -1) {
-      break;
-    }
-    remaining = remaining.substring(commaIndex + 1);
-    remaining.trim();
-  }
+        if (buffer.indexOf('i') > 0) {
+          Serial.println("INCREMENTO CONTINUO");
+          Serial.print("Velocidad = ");
+          for (int j = 1; j <= 25; j++) {
+            if (velocidad >= 0 && velocidad < 254) {
+              analogWrite(SSR_SIGNAL_PIN, velocidad);
+              delay(120);
+            }
+            velocidad = velocidad + 10;
+          }
+          Serial.println(velocidad);
+          motorState.running = true;
+          motorState.speed = velocidad;
+          publishTelemetry();
+        }
 
-  if (stepCount == 0) {
-    Serial.println("No valid speed steps provided");
-    return;
-  }
+        if (buffer.indexOf('a') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          motorState.running = true;
+          delay(200);
+        }
 
-  int currentSpeed = 0;
-  for (int step = 0; step < stepCount; step++) {
-    if (cancelRamp) {
-      Serial.println("Arranque cancelado");
-      rampInProgress = false;
-      cancelRamp = false;
-      stopMotor();
-      motorState.mode = "stopped";
-      publishTelemetry();
-      return;
-    }
+        if (buffer.indexOf('b') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          delay(150);
+        }
 
-    int stepSpeed = constrain(stepSpeeds[step], 0, 255);
-    Serial.println("Step " + String(step + 1) + ": ramp to " + String(stepSpeed));
-    
-    // Rampa gradual hacia la velocidad objetivo
-    for (int speed = currentSpeed; speed <= stepSpeed; speed += 5) {
-      setMotorSpeed(speed);
-      delay(100);
-      if (cancelRamp) {
-        Serial.println("Arranque cancelado durante rampa");
-        rampInProgress = false;
-        cancelRamp = false;
-        stopMotor();
-        motorState.mode = "stopped";
-        publishTelemetry();
-        return;
+        if (buffer.indexOf('c') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          delay(120);
+        }
+
+        if (buffer.indexOf('d') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          delay(80);
+        }
+
+        if (buffer.indexOf('e') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          delay(70);
+        }
+
+        if (buffer.indexOf('f') > 0) {
+          velocidad = constrain(velocidad, 0, 255);
+          analogWrite(SSR_SIGNAL_PIN, velocidad);
+          Serial.print("Velocidad = ");
+          Serial.println(velocidad);
+          delay(15);
+          motorState.speed = velocidad;
+          motorState.running = true;
+          publishTelemetry();
+          delay(60);
+        }
       }
+      buffer = "";
     }
-    
-    currentSpeed = stepSpeed;
-    delay(500); // Mantener velocidad por 500ms
-    Serial.println("Step " + String(step + 1) + " reached");
+  } else {
+    buffer += data;
   }
-  
-  rampInProgress = false;
-  Serial.println("6-step soft start completed");
-  publishTelemetry();
 }
 
 void setMotorSpeed(int speed) {
   speed = constrain(speed, 0, 255);
-  analogWrite(MOTOR_PWM_PIN, speed);
+  analogWrite(SSR_SIGNAL_PIN, speed);
   motorState.speed = speed;
-  
-  if (speed > 0 && !motorState.running) {
-    startMotor();
-  } else if (speed == 0 && motorState.running && !rampInProgress) {
-    stopMotor();
-  }
-
+  motorState.running = (speed > 0);
   publishTelemetry();
 }
 
@@ -871,58 +820,6 @@ void loadConfiguration() {
 }
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
-void processBluetoothCommand(String command) {
-  command.trim();
-  if (command.length() == 0) return;
-
-  Serial.println("[Bluetooth] Received: " + command);
-
-  if (command.equalsIgnoreCase("wifi") || command.equalsIgnoreCase("mode:wifi")) {
-    activeControl = CONTROL_WIFI;
-    sendBluetoothResponse("ok", "mode", "wifi");
-    Serial.println("Control switched to WiFi via Bluetooth request");
-    return;
-  }
-
-  if (command.equalsIgnoreCase("bluetooth") || command.equalsIgnoreCase("mode:bluetooth")) {
-    activeControl = CONTROL_BLUETOOTH;
-    sendBluetoothResponse("ok", "mode", "bluetooth");
-    return;
-  }
-
-  if (command.startsWith("speed=") || command.startsWith("pwm=")) {
-    int value = command.substring(command.indexOf('=') + 1).toInt();
-    setMotorSpeed(value);
-    sendBluetoothResponse("ok", "speed", String(motorState.speed));
-    activeControl = CONTROL_BLUETOOTH;
-    lastBluetoothActivity = millis();
-    return;
-  }
-
-  if (command.startsWith("arranque6p") || command.startsWith("arranque6P")) {
-    activeControl = CONTROL_BLUETOOTH;
-    lastBluetoothActivity = millis();
-    handleMotorCommand(command);
-    sendBluetoothResponse("ok", "arranque6p");
-    return;
-  }
-
-  // Comandos clásicos (0p,0i,start, etc.)
-  activeControl = CONTROL_BLUETOOTH;
-  lastBluetoothActivity = millis();
-  if (command.equalsIgnoreCase("start") ||
-      command.equalsIgnoreCase("paro") ||
-      command.equalsIgnoreCase("stop") ||
-      command.equalsIgnoreCase("continuo") ||
-      command.equalsIgnoreCase("0p") ||
-      command.equalsIgnoreCase("0i")) {
-    handleMotorCommand(command);
-    sendBluetoothResponse("ok", command);
-  } else {
-    sendBluetoothResponse("error", command, "unknown_command");
-    Serial.println("Bluetooth command not recognized: " + command);
-  }
-}
 
 void handleBluetooth() {
   if (!bluetoothReady) return;
@@ -940,8 +837,8 @@ void handleBluetooth() {
 
   while (currentClient && btSerial.available()) {
     char c = btSerial.read();
+    processCharacter(c);
     if (c == '\n') {
-      processBluetoothCommand(bluetoothBuffer);
       bluetoothBuffer = "";
     } else if (c != '\r') {
       if (bluetoothBuffer.length() < 256) {
