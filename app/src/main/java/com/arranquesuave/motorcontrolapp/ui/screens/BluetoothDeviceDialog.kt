@@ -3,7 +3,9 @@ package com.arranquesuave.motorcontrolapp.ui.screens
 
 import android.bluetooth.BluetoothDevice
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,21 +29,28 @@ fun BluetoothDeviceDialog(
         onDismissRequest = onDismiss,
         title = { Text("Dispositivos Bluetooth", style = MaterialTheme.typography.titleLarge) },
         text = {
-            if (scanning) {
-                Text("Buscando dispositivos…", modifier = Modifier.padding(8.dp))
-            } else if (devices.isEmpty()) {
-                Text("No se encontró ninguno.\nPulsa 'Buscar otra vez'.", modifier = Modifier.padding(8.dp))
-            }
-            LazyColumn {
-                items(devices) { device ->
-                    Text(
-                        text = "${device.name ?: "Sin nombre"}\n${device.address}",
-                        style = MaterialTheme.typography.bodyMedium,
+            Column {
+                if (scanning) {
+                    Text("Buscando dispositivos…", modifier = Modifier.padding(8.dp))
+                } else if (devices.isEmpty()) {
+                    Text("No se encontró ninguno.\nPulsa 'Buscar otra vez'.", modifier = Modifier.padding(8.dp))
+                } else {
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelect(device) }
-                            .padding(8.dp)
-                    )
+                            .heightIn(max = 300.dp)
+                    ) {
+                        items(devices) { device ->
+                            Text(
+                                text = "${device.name ?: "Sin nombre"}\n${device.address}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(device) }
+                                    .padding(8.dp)
+                            )
+                        }
+                    }
                 }
             }
         },
