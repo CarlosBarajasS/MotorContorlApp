@@ -33,6 +33,9 @@ class MqttService(private val context: Context) {
     private var onCurrentReceived: ((Float) -> Unit)? = null
     private var onVoltageReceived: ((Float) -> Unit)? = null
     private var onModeReceived: ((String) -> Unit)? = null
+
+    // Callback para discovery
+    private var onDeviceDiscovered: ((DiscoveredDevice) -> Unit)? = null
     
     // Estado de conexión
     private var isConnecting = false
@@ -282,7 +285,85 @@ class MqttService(private val context: Context) {
     fun setOnModeReceived(callback: (String) -> Unit) {
         onModeReceived = callback
     }
-    
+
+    fun setOnDeviceDiscovered(callback: (DiscoveredDevice) -> Unit) {
+        onDeviceDiscovered = callback
+    }
+
+    // ============================================
+    // DISCOVERY
+    // ============================================
+
+    /**
+     * Suscribirse al topic de discovery para encontrar dispositivos ESP32
+     */
+    fun subscribeToDiscovery() {
+        val discoveryTopic = "motor/discovery/#"
+
+        mqttClient?.subscribeWith()
+            ?.topicFilter(discoveryTopic)
+            ?.qos(MqttQos.AT_LEAST_ONCE)
+            ?.callback { publish ->
+                val payload = String(publish.payloadAsBytes)
+                handleDiscoveryMessage(payload)
+            }
+            ?.send()
+            ?.whenComplete { _, throwable ->
+                if (throwable != null) {
+                    Log.e(TAG, "Failed to subscribe to discovery topic", throwable)
+                } else {
+                    Log.d(TAG, "Subscribed to discovery topic successfully")
+                }
+            }
+    }
+
+    /**
+     * Procesar mensaje de discovery y parsear info del dispositivo
+     */
+    private fun handleDiscoveryMessage(payload: String) {
+        try {
+            // Parsear JSON: {"device_name":"MotorController","ap_ip":"192.168.4.1","wifi_ip":"192.168.1.105",...}
+            val device = parseDiscoveryPayload(payload)
+            if (device != null) {
+                Log.d(TAG, "Device discovered: ${device.deviceName} at ${device.wifiIp ?: device.apIp}")
+                onDeviceDiscovered?.invoke(device)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing discovery message: $payload", e)
+        }
+    }
+
+    /**
+     * Parsear payload JSON de discovery
+     */
+    private fun parseDiscoveryPayload(json: String): DiscoveredDevice? {
+        return try {
+            // Simple JSON parsing (puedes usar Gson/Moshi si prefieres)
+            val deviceName = json.substringAfter("\"device_name\":\"").substringBefore("\"")
+            val apIp = json.substringAfter("\"ap_ip\":\"").substringBefore("\"")
+            val apSsid = json.substringAfter("\"ap_ssid\":\"").substringBefore("\"")
+
+            val wifiIp = if (json.contains("\"wifi_ip\":\"")) {
+                json.substringAfter("\"wifi_ip\":\"").substringBefore("\"")
+            } else null
+
+            val wifiSsid = if (json.contains("\"wifi_ssid\":\"")) {
+                json.substringAfter("\"wifi_ssid\":\"").substringBefore("\"")
+            } else null
+
+            DiscoveredDevice(
+                deviceName = deviceName,
+                apIp = apIp,
+                apSsid = apSsid,
+                wifiIp = wifiIp,
+                wifiSsid = wifiSsid
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse discovery payload", e)
+            null
+        }
+    }
+
     // ============================================
     // ESTADO Y CONTROL
     // ============================================
@@ -333,4 +414,25 @@ class MqttService(private val context: Context) {
             Log.e(TAG, "Error cleaning up MQTT service", e)
         }
     }
+}
+
+/**
+ * Clase de datos para dispositivos ESP32 descubiertos via MQTT
+ */
+data class DiscoveredDevice(
+    val deviceName: String,
+    val apIp: String,
+    val apSsid: String,
+    val wifiIp: String? = null,
+    val wifiSsid: String? = null
+) {
+    /**
+     * Obtener la IP preferida (WiFi si está disponible, sino AP)
+     */
+    fun getPreferredIp(): String = wifiIp ?: apIp
+
+    /**
+     * Verificar si está conectado a WiFi
+     */
+    fun isConnectedToWiFi(): Boolean = !wifiIp.isNullOrBlank()
 }

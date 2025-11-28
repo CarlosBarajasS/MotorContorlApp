@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ctype.h>
+#include <ESPmDNS.h>
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
 #include "BluetoothSerial.h"
 #include <esp_gap_bt_api.h>
@@ -40,6 +41,7 @@ String mqttTopicCurrent;
 String mqttTopicVoltage;
 String mqttTopicRaw;
 String mqttTopicType;
+String mqttTopicDiscovery;
 
 enum ControlChannel {
   CONTROL_WIFI = 0,
@@ -127,6 +129,7 @@ void buildMqttTopics() {
   mqttTopicVoltage = base + "/voltage";
   mqttTopicRaw = base + "/raw";
   mqttTopicType = base + "/type";
+  mqttTopicDiscovery = "motor/discovery/" + device_name;
   Serial.println("MQTT topics configured for device: " + base);
 }
 
@@ -207,6 +210,13 @@ void loop() {
     lastTelemetry = millis();
   }
 
+  // Publicar discovery cada 30 segundos
+  static unsigned long lastDiscovery = 0;
+  if (millis() - lastDiscovery > 30000) {
+    publishDiscovery();
+    lastDiscovery = millis();
+  }
+
   delay(50);
 }
 
@@ -242,12 +252,21 @@ void startConfigurationMode() {
 }
 
 void connectToWiFi() {
-  WiFi.mode(WIFI_STA);
+  // MODO DUAL AP+STA: Mantener AP siempre activo para discovery
+  WiFi.mode(WIFI_AP_STA);
+
+  // Configurar AP primero
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
+  IPAddress apIP = WiFi.softAPIP();
+  Serial.print("AP always active at: ");
+  Serial.println(apIP);
+
+  // Intentar conectar a WiFi configurado
   WiFi.disconnect(true);
   delay(100);
   WiFi.setAutoReconnect(true);
   WiFi.begin(wifiConfig.ssid.c_str(), wifiConfig.password.c_str());
-  
+
   Serial.print("Connecting to WiFi");
   unsigned long startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED &&
@@ -255,29 +274,37 @@ void connectToWiFi() {
     delay(WIFI_RETRY_INTERVAL_MS);
     Serial.print(".");
   }
-  
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println();
     Serial.println("WiFi connected!");
-    Serial.print("IP address: ");
+    Serial.print("STA IP address: ");
     Serial.println(WiFi.localIP());
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
     buildMqttTopics();
 
-    if (WiFi.getMode() != WIFI_STA) {
-      WiFi.softAPdisconnect(true);
-      WiFi.mode(WIFI_STA);
+    // Configurar mDNS para discovery local
+    String mdnsName = device_name;
+    mdnsName.toLowerCase();
+    mdnsName.replace(" ", "-");
+    if (MDNS.begin(mdnsName.c_str())) {
+      MDNS.addService("http", "tcp", 80);
+      MDNS.addService("motorcontrol", "tcp", 80);
+      Serial.println("mDNS started: " + mdnsName + ".local");
+    } else {
+      Serial.println("Error starting mDNS");
     }
-    
+
     // Configurar MQTT
     mqtt.setServer(mqtt_broker.c_str(), mqtt_port);
     mqtt.setCallback(mqttCallback);
-    
+
   } else {
     Serial.println();
     Serial.print("WiFi connection failed (status=");
     Serial.print(WiFi.status());
-    Serial.println("), starting setup mode...");
-    startConfigurationMode();
+    Serial.println("), but AP mode still active at 192.168.4.1");
   }
 }
 
@@ -400,12 +427,14 @@ void handleWiFiConfig() {
 
 void handleStatus() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
-  
+
   DynamicJsonDocument json(512);
-  
+
   json["wifi_connected"] = (WiFi.status() == WL_CONNECTED);
   json["ssid"] = WiFi.SSID();
   json["ip_address"] = WiFi.localIP().toString();
+  json["ap_ip"] = WiFi.softAPIP().toString();  // Siempre disponible en modo dual
+  json["ap_ssid"] = AP_SSID;
   json["mqtt_connected"] = mqtt.connected();
   json["mqtt_broker"] = mqtt_broker;
   json["device_name"] = device_name;
@@ -419,17 +448,17 @@ void handleStatus() {
 #endif
   json["uptime"] = millis();
   json["free_heap"] = ESP.getFreeHeap();
-  
+
   // Estado del motor
   json["motor_running"] = motorState.running;
   json["motor_speed"] = motorState.speed;
   json["motor_current"] = motorState.current;
   json["motor_voltage"] = motorState.voltage;
   json["motor_mode"] = motorState.mode;
-  
+
   String response;
   serializeJson(json, response);
-  
+
   server.send(200, "application/json", response);
 }
 
@@ -525,12 +554,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 void publishTelemetry() {
   if (!mqtt.connected()) return;
-  
+
   mqtt.publish(mqttTopicState.c_str(), motorState.running ? "running" : "stopped");
   mqtt.publish(mqttTopicSpeed.c_str(), String(motorState.speed).c_str());
   mqtt.publish(mqttTopicCurrent.c_str(), String(motorState.current).c_str());
   mqtt.publish(mqttTopicVoltage.c_str(), String(motorState.voltage).c_str());
-  
+
   // Raw telemetry
   String raw = "{";
   raw += "\"speed\":" + String(motorState.speed) + ",";
@@ -539,8 +568,30 @@ void publishTelemetry() {
   raw += "\"running\":" + String(motorState.running ? "true" : "false") + ",";
   raw += "\"mode\":\"" + motorState.mode + "\"";
   raw += "}";
-  
+
   mqtt.publish(mqttTopicRaw.c_str(), raw.c_str());
+}
+
+void publishDiscovery() {
+  if (!mqtt.connected()) return;
+
+  // Publicar información de discovery para que apps puedan encontrar el dispositivo
+  String discovery = "{";
+  discovery += "\"device_name\":\"" + device_name + "\",";
+  discovery += "\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\",";
+  discovery += "\"ap_ssid\":\"" + String(AP_SSID) + "\",";
+
+  if (WiFi.status() == WL_CONNECTED) {
+    discovery += "\"wifi_ip\":\"" + WiFi.localIP().toString() + "\",";
+    discovery += "\"wifi_ssid\":\"" + WiFi.SSID() + "\",";
+  }
+
+  discovery += "\"uptime\":" + String(millis()) + ",";
+  discovery += "\"free_heap\":" + String(ESP.getFreeHeap());
+  discovery += "}";
+
+  mqtt.publish(mqttTopicDiscovery.c_str(), discovery.c_str(), true); // retained=true
+  Serial.println("Published discovery: " + discovery);
 }
 
 // ======================================================================

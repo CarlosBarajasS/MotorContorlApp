@@ -24,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
-// import com.arranquesuave.motorcontrolapp.ui.screens.VerificationScreen (eliminado)
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
 import com.arranquesuave.motorcontrolapp.ui.screens.LoginScreen
@@ -32,6 +31,7 @@ import com.arranquesuave.motorcontrolapp.ui.screens.SignUpScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.StatsScreen
+import com.arranquesuave.motorcontrolapp.ui.screens.SettingsScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.WiFiSetupScreenReal
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import com.arranquesuave.motorcontrolapp.utils.SessionManager
@@ -40,6 +40,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
 import android.app.Activity
 import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 
 class MainActivity : ComponentActivity() {
 
@@ -66,7 +70,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val sessionManager = SessionManager(this)
-        val startDestination = if (BuildConfig.NO_AUTH) "control" else if (sessionManager.getToken() != null) "control" else "login"
+        val startDestination = if (BuildConfig.NO_AUTH) "main" else if (sessionManager.getToken() != null) "main" else "login"
         setContent {
             MotorControlAppTheme {
                 Surface {
@@ -89,7 +93,7 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
                         when (currentRoute) {
                             "bluetooth" -> navController.popBackStack()
                             "wifi_setup" -> navController.popBackStack()
-                            "control", "login" -> {
+                            "main", "login" -> {
                                 val now = System.currentTimeMillis()
                                 if (now - lastBackPressTime < 2000L) {
                                     activity.finish()
@@ -104,108 +108,101 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
                     }
                     NavHost(navController, startDestination = startDestination) {
                         composable("login") {
-                                LoginScreen(onLogin = { email, password ->
+                            LoginScreen(
+                                onLogin = { email, password ->
                                     authViewModel.login(email, password)
-                                }, onNavigateToSignUp = {
+                                },
+                                onNavigateToSignUp = {
                                     navController.navigate("signup")
-                                })
-                                LaunchedEffect(loginResult) {
-                                loginResult?.onSuccess { response -> sessionManager.saveToken(response.token)
-                                navController.navigate("control") {
-                                popUpTo("login") { inclusive = true }
                                 }
+                            )
+                            LaunchedEffect(loginResult) {
+                                loginResult?.onSuccess { response ->
+                                    sessionManager.saveToken(response.token)
+                                    navController.navigate("main") {
+                                        popUpTo("login") { inclusive = true }
+                                    }
                                     authViewModel.loginState.value = null
-    }
-}
-                            
+                                }
+                            }
                         }
+
                         composable("signup") {
-                                SignUpScreen(onSignUp = { email, password, confirm ->
+                            SignUpScreen(
+                                onSignUp = { email, password, confirm ->
                                     signupEmail = email
                                     signupPassword = password
                                     authViewModel.signup(email, password, confirm)
-                                }, onNavigateToLogin = {
+                                },
+                                onNavigateToLogin = {
                                     navController.popBackStack()
-                                })
-                                // Manejar el resultado del registro
-                                LaunchedEffect(signupResult) {
-                                    signupResult?.onSuccess { response ->
-                                        if (response.isSuccessful) {
-                                            // Ir directamente a la pantalla de control tras registro exitoso
-                                            authViewModel.login(signupEmail, signupPassword)
-                                            Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
-                                            // Reseteamos el estado de signup para evitar bucles
-                                            authViewModel.signupState.value = null
-                                        } else {
-                                            // Mostrar mensaje de error
-                                            Toast.makeText(
-                                                context,
-                                                "Error: La contraseña debe tener al menos 8 caracteres, incluir números, mayúsculas y caracteres especiales",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                            // Resetear el estado para no mostrar el error nuevamente
-                                            authViewModel.signupState.value = null
-                                        }
-                                    }
-                                    signupResult?.onFailure { error ->
-                                        Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_LONG).show()
+                                }
+                            )
+                            LaunchedEffect(signupResult) {
+                                signupResult?.onSuccess { response ->
+                                    if (response.isSuccessful) {
+                                        authViewModel.login(signupEmail, signupPassword)
+                                        Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
+                                        authViewModel.signupState.value = null
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Error: La contraseña debe tener al menos 8 caracteres",
+                                            Toast.LENGTH_LONG
+                                        ).show()
                                         authViewModel.signupState.value = null
                                     }
                                 }
-                                
-                                // Manejar resultado del login después del registro
-                                LaunchedEffect(loginResult) {
-                                    loginResult?.onSuccess { response -> 
-                                        // Guardar token y navegar a pantalla principal
-                                        sessionManager.saveToken(response.token)
-                                        navController.navigate("control") {
-                                            popUpTo("signup") { inclusive = true }
-                                        }
-                                        authViewModel.loginState.value = null
+                                signupResult?.onFailure { error ->
+                                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_LONG).show()
+                                    authViewModel.signupState.value = null
+                                }
+                            }
+                            LaunchedEffect(loginResult) {
+                                loginResult?.onSuccess { response ->
+                                    sessionManager.saveToken(response.token)
+                                    navController.navigate("main") {
+                                        popUpTo("signup") { inclusive = true }
+                                    }
+                                    authViewModel.loginState.value = null
+                                }
+                            }
+                        }
+
+                        // Main screen with bottom navigation (3 tabs)
+                        composable("main") {
+                            MainScreenWithTabs(
+                                viewModel = viewModel,
+                                onLogout = { authViewModel.logout() }
+                            )
+                            val logoutResult by authViewModel.logoutState.collectAsState(initial = authViewModel.logoutState.value)
+                            LaunchedEffect(logoutResult) {
+                                logoutResult?.onSuccess {
+                                    sessionManager.clearToken()
+                                    authViewModel.loginState.value = null
+                                    authViewModel.logoutState.value = null
+                                    navController.navigate("login") {
+                                        popUpTo("main") { inclusive = true }
                                     }
                                 }
-                            
+                            }
                         }
-                        // Pantalla de verificación eliminada
-                                composable("control") {
-                            MotorControlScreen(
-    viewModel = viewModel,
-    onLogout = { authViewModel.logout() },
-    onNavigateHome = {},
-    onNavigateSettings = { navController.navigate("bluetooth") },
-    onNavigateToWiFiSetup = { navController.navigate("wifi_setup") } // ✅ NAVEGACIÓN WiFi
-)
-val logoutResult by authViewModel.logoutState.collectAsState(initial = authViewModel.logoutState.value)
-LaunchedEffect(logoutResult) {
-    logoutResult?.onSuccess { sessionManager.clearToken()
-        authViewModel.loginState.value = null
-        authViewModel.logoutState.value = null
-        navController.navigate("login") {
-            popUpTo("control") { inclusive = true }
-        }
-    }
-}
-                        }
+
+                        // Bluetooth screen (accessed from Settings)
                         composable("bluetooth") {
                             BluetoothControlScreen(
-    viewModel = viewModel,
-    onLogout = { authViewModel.logout() },
-    onNavigateHome = { navController.navigate("control") },
-    onNavigateSettings = { navController.navigate("stats") }
-)
-                                
-                        }
-                        composable("stats") {
-                            StatsScreen(
                                 viewModel = viewModel,
-                                onNavigateBack = { navController.popBackStack() }
+                                onLogout = { authViewModel.logout() },
+                                onNavigateHome = { navController.navigate("main") },
+                                onNavigateSettings = { navController.navigate("main") }
                             )
                         }
+
+                        // WiFi Setup screen (accessed from Settings)
                         composable("wifi_setup") {
                             WiFiSetupScreenReal(
                                 onNavigateBack = { navController.popBackStack() },
                                 onConfigurationComplete = {
-                                    // ✅ CONFIGURACIÓN COMPLETADA
                                     viewModel.onWiFiSetupCompleted()
                                     Toast.makeText(
                                         context,
@@ -245,6 +242,56 @@ LaunchedEffect(logoutResult) {
         }
         if (needed.isNotEmpty()) {
             requestPerms.launch(needed.toTypedArray())
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MainScreenWithTabs(
+    viewModel: MotorViewModel,
+    onLogout: () -> Unit
+) {
+    var selectedTab by remember { mutableStateOf(0) }
+
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.Home, contentDescription = "Control") },
+                    label = { Text("Control") },
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 }
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                    label = { Text("Settings") },
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 }
+                )
+                NavigationBarItem(
+                    icon = { Icon(Icons.Default.BarChart, contentDescription = "Stats") },
+                    label = { Text("Stats") },
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 }
+                )
+            }
+        }
+    ) { paddingValues ->
+        Box(modifier = Modifier.padding(paddingValues)) {
+            when (selectedTab) {
+                0 -> MotorControlScreen(
+                    viewModel = viewModel,
+                    onLogout = onLogout
+                )
+                1 -> SettingsScreen(
+                    viewModel = viewModel
+                )
+                2 -> StatsScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { /* No hay back en tabs */ }
+                )
+            }
         }
     }
 }

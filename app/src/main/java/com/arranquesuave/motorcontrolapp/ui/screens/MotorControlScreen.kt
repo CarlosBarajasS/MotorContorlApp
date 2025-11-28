@@ -9,8 +9,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExitToApp
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -25,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import com.arranquesuave.motorcontrolapp.R
+import com.arranquesuave.motorcontrolapp.ui.components.ConnectionStatusBar
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 import java.util.Locale
 
@@ -32,24 +31,23 @@ import java.util.Locale
 @Composable
 fun MotorControlScreen(
     viewModel: MotorViewModel,
-    onLogout: () -> Unit,
-    onNavigateHome: () -> Unit,
-    onNavigateSettings: () -> Unit,
-    onNavigateToWiFiSetup: () -> Unit = {} // ✅ NUEVO PARÁMETRO
+    onLogout: () -> Unit
 ) {
     val sliderStates = viewModel.sliders.map { it.collectAsState() }
     val motorRunning by viewModel.motorRunning.collectAsState()
     val connectionMode by viewModel.connectionMode.collectAsState()
-    val status by viewModel.status.collectAsState()
     val motorMode by viewModel.motorMode.collectAsState()
-    val currentUrl by viewModel.currentUrl.collectAsState()
     val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
-    val localIp by viewModel.localEsp32Ip.collectAsState()
-    val esp32Status by viewModel.esp32Status.collectAsState()
     val normalizedMode = motorMode?.lowercase(Locale.getDefault())
     val isStoppedMode = normalizedMode == "paro" || normalizedMode == "stop" || normalizedMode == "stopped"
     val canSendStart = !motorRunning || isStoppedMode
     val canSendStop = motorRunning && !isStoppedMode
+
+    // Connection status
+    val isBluetoothConnected = connectionMode == "bluetooth" && connectedAddress != null
+    val isWifiConnected = connectionMode == "wifi" && connectedAddress != null
+    val isMqttConnected by viewModel.mqttConnected.collectAsState()
+    val deviceName = connectedAddress ?: "Desconectado"
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Logo de fondo desvanecido
@@ -78,57 +76,27 @@ fun MotorControlScreen(
                         }
                     }
                 )
-            },
-            bottomBar = {
-                NavigationBar {
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Filled.Home, contentDescription = "Home") },
-                        selected = true,
-                        onClick = onNavigateHome
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Filled.Settings, contentDescription = "Settings") },
-                        selected = false,
-                        onClick = onNavigateSettings
-                    )
-                }
             }
         ) { inner ->
             val topPadding = inner.calculateTopPadding() + 16.dp
-            val botPadding = inner.calculateBottomPadding() + 16.dp
 
             LazyColumn(
                 state = rememberLazyListState(),
-                contentPadding = PaddingValues(top = topPadding, bottom = botPadding, start = 16.dp, end = 16.dp),
+                contentPadding = PaddingValues(top = topPadding, bottom = 16.dp, start = 16.dp, end = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
-                // ✅ SELECTOR DE MODO DE CONEXIÓN
+                // Connection Status Bar
                 item {
-                    ConnectionModeSelector(
-                        currentMode = connectionMode,
-                        localIp = localIp,
-                        onModeChanged = { newMode ->
-                            viewModel.switchConnectionMode(newMode)
-                        },
-                        onNavigateToWiFiSetup = onNavigateToWiFiSetup // ✅ PASAR NAVEGACIÓN
+                    ConnectionStatusBar(
+                        isBluetoothConnected = isBluetoothConnected,
+                        isWifiConnected = isWifiConnected,
+                        isMqttConnected = isMqttConnected,
+                        deviceName = deviceName
                     )
                 }
 
-                // ✅ PANEL DE CONEXIÓN Y ESTADO
-                item {
-                    ConnectionPanel(
-                        viewModel = viewModel,
-                        onOpenBluetoothDialog = {
-                            // Navegar a la pantalla de Bluetooth para discovery
-                            onNavigateSettings()
-                        },
-                        esp32Status = esp32Status,
-                        onRefreshEsp32Status = { viewModel.refreshEsp32Status() }
-                    )
-                }
-
-                // ✅ CONTROL DE MOTOR (solo si está conectado)
+                // Motor Control (only if connected)
                 if (connectedAddress != null) {
                     item {
                         Card(
