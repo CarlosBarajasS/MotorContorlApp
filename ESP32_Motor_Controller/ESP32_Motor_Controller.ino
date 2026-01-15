@@ -16,7 +16,7 @@
 #define AP_SSID "ESP32-MotorSetup"
 #define AP_PASSWORD "12345678"
 
-#define SSR_SIGNAL_PIN 2
+#define SSR_SIGNAL_PIN 14
 #define CURRENT_SENSOR_PIN 36
 #define VOLTAGE_SENSOR_PIN 39
 
@@ -57,6 +57,7 @@ void handleBluetooth();
 // Tiempos de conexión WiFi
 const uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
 const uint32_t WIFI_RETRY_INTERVAL_MS = 500;
+const uint32_t WIFI_RETRY_BACKOFF_MS = 30000;
 
 // ======================================================================
 // OBJETOS GLOBALES
@@ -85,6 +86,11 @@ struct WiFiConfig {
   String password = "";
   bool configured = false;
 } wifiConfig;
+
+unsigned long wifiConnectStart = 0;
+unsigned long wifiRetryAt = 0;
+bool wifiConnectInProgress = false;
+bool wifiWasConnected = false;
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
 BluetoothSerial btSerial;
@@ -133,9 +139,25 @@ void buildMqttTopics() {
   Serial.println("MQTT topics configured for device: " + base);
 }
 
+void ensureApActive() {
+  if (WiFi.getMode() != WIFI_AP_STA) {
+    WiFi.mode(WIFI_AP_STA);
+  }
+  if (WiFi.softAP(AP_SSID, AP_PASSWORD)) {
+    IPAddress apIP = WiFi.softAPIP();
+    Serial.print("AP active at: ");
+    Serial.println(apIP);
+  } else {
+    Serial.println("Failed to start AP");
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   Serial.println("\n=== ESP32 Motor Controller Starting ===");
+
+  WiFi.setSleep(false);
+  WiFi.persistent(false);
   
   // Inicializar EEPROM
   EEPROM.begin(EEPROM_SIZE);
@@ -147,17 +169,18 @@ void setup() {
   loadConfiguration();
   buildMqttTopics();
   
-  // Intentar conectar a WiFi guardado
   if (wifiConfig.configured) {
     Serial.println("Attempting to connect to saved WiFi...");
-    connectToWiFi();
+    ensureApActive();
   } else {
     Serial.println("No WiFi config found, starting setup mode...");
     startConfigurationMode();
   }
-  
-  // Configurar servidor web
+
   setupWebServer();
+  if (wifiConfig.configured) {
+    connectToWiFi();
+  }
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
   // Usar emparejamiento clásico con PIN fijo para evitar códigos aleatorios
@@ -186,6 +209,7 @@ void loop() {
   // Watchdog ya no es necesario con analogWrite() porque genera señal PWM continua
 
   server.handleClient();
+  handleWiFiConnection();
 
 #if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
   if (bluetoothReady) {
@@ -238,13 +262,9 @@ void startConfigurationMode() {
   Serial.println("Starting WiFi configuration mode...");
 
   WiFi.mode(WIFI_AP_STA);
-  WiFi.disconnect(true);
+  WiFi.disconnect();
   delay(100);
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
-  
-  IPAddress IP = WiFi.softAPIP();
-  Serial.print("AP IP address: ");
-  Serial.println(IP);
+  ensureApActive();
   
   Serial.println("Connect to WiFi: " + String(AP_SSID));
   Serial.println("Password: " + String(AP_PASSWORD));
@@ -256,55 +276,76 @@ void connectToWiFi() {
   WiFi.mode(WIFI_AP_STA);
 
   // Configurar AP primero
-  WiFi.softAP(AP_SSID, AP_PASSWORD);
-  IPAddress apIP = WiFi.softAPIP();
-  Serial.print("AP always active at: ");
-  Serial.println(apIP);
+  ensureApActive();
 
   // Intentar conectar a WiFi configurado
-  WiFi.disconnect(true);
+  WiFi.disconnect();
   delay(100);
-  WiFi.setAutoReconnect(true);
+  WiFi.setAutoReconnect(false);
   WiFi.begin(wifiConfig.ssid.c_str(), wifiConfig.password.c_str());
 
-  Serial.print("Connecting to WiFi");
-  unsigned long startAttemptTime = millis();
-  while (WiFi.status() != WL_CONNECTED &&
-         millis() - startAttemptTime < WIFI_CONNECT_TIMEOUT_MS) {
-    delay(WIFI_RETRY_INTERVAL_MS);
-    Serial.print(".");
+  Serial.println("Connecting to WiFi (non-blocking)...");
+  wifiConnectStart = millis();
+  wifiConnectInProgress = true;
+}
+
+void onWiFiConnected() {
+  Serial.println();
+  Serial.println("WiFi connected!");
+  Serial.print("STA IP address: ");
+  Serial.println(WiFi.localIP());
+  Serial.print("AP IP address: ");
+  Serial.println(WiFi.softAPIP());
+  buildMqttTopics();
+
+  String mdnsName = device_name;
+  mdnsName.toLowerCase();
+  mdnsName.replace(" ", "-");
+  if (MDNS.begin(mdnsName.c_str())) {
+    MDNS.addService("http", "tcp", 80);
+    MDNS.addService("motorcontrol", "tcp", 80);
+    Serial.println("mDNS started: " + mdnsName + ".local");
+  } else {
+    Serial.println("Error starting mDNS");
   }
 
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println();
-    Serial.println("WiFi connected!");
-    Serial.print("STA IP address: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("AP IP address: ");
-    Serial.println(WiFi.softAPIP());
-    buildMqttTopics();
+  mqtt.setServer(mqtt_broker.c_str(), mqtt_port);
+  mqtt.setCallback(mqttCallback);
+  WiFi.setAutoReconnect(true);
+}
 
-    // Configurar mDNS para discovery local
-    String mdnsName = device_name;
-    mdnsName.toLowerCase();
-    mdnsName.replace(" ", "-");
-    if (MDNS.begin(mdnsName.c_str())) {
-      MDNS.addService("http", "tcp", 80);
-      MDNS.addService("motorcontrol", "tcp", 80);
-      Serial.println("mDNS started: " + mdnsName + ".local");
-    } else {
-      Serial.println("Error starting mDNS");
+void handleWiFiConnection() {
+  if (!wifiConfig.configured) return;
+
+  wl_status_t status = WiFi.status();
+  if (status == WL_CONNECTED) {
+    if (!wifiWasConnected) {
+      wifiWasConnected = true;
+      wifiConnectInProgress = false;
+      onWiFiConnected();
     }
+    return;
+  }
 
-    // Configurar MQTT
-    mqtt.setServer(mqtt_broker.c_str(), mqtt_port);
-    mqtt.setCallback(mqttCallback);
+  if (wifiWasConnected) {
+    wifiWasConnected = false;
+    Serial.println("WiFi disconnected, will retry...");
+  }
 
-  } else {
-    Serial.println();
-    Serial.print("WiFi connection failed (status=");
-    Serial.print(WiFi.status());
-    Serial.println("), but AP mode still active at 192.168.4.1");
+  if (wifiConnectInProgress) {
+    if (millis() - wifiConnectStart >= WIFI_CONNECT_TIMEOUT_MS) {
+      wifiConnectInProgress = false;
+      wifiRetryAt = millis() + WIFI_RETRY_BACKOFF_MS;
+      Serial.print("WiFi connection failed (status=");
+      Serial.print(status);
+      Serial.println("), keeping AP active at 192.168.4.1");
+      ensureApActive();
+    }
+    return;
+  }
+
+  if (millis() >= wifiRetryAt) {
+    connectToWiFi();
   }
 }
 

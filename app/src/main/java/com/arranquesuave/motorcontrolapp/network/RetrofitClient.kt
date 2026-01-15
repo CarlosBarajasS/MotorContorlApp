@@ -8,7 +8,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 object RetrofitClient {
     
     // URLs del backend API
-    private const val BASE_URL_LOCAL = "http://192.168.1.12:3000/"   // Casa del profesor (local)
+    private const val BASE_URL_LOCAL = "http://192.168.1.24:3000/"   // Casa del profesor (local)
     private const val BASE_URL_REMOTE = "http://177.247.175.4:8080/"
     private const val BASE_URL_TEST = "http://httpbin.org/"          // Para testing sin backend
     

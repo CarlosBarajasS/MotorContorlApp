@@ -125,8 +125,9 @@ object MqttConfig {
 
     fun normalizeDeviceId(raw: String?): String {
         val sanitized = raw
-            ?.lowercase()
-            ?.replace("[^a-z0-9_-]".toRegex(), "-")
+            ?.trim()
+            ?.replace(" ", "-")
+            ?.replace("[^A-Za-z0-9_-]".toRegex(), "-")
             ?.trim('-')
         return if (sanitized.isNullOrBlank()) DEFAULT_DEVICE_ID else sanitized
     }

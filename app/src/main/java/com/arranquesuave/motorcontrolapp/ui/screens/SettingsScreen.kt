@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.arranquesuave.motorcontrolapp.services.DiscoveredDevice
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,7 +24,7 @@ fun SettingsScreen(
 ) {
     val connectionMode by viewModel.connectionMode.collectAsState()
     val localIp by viewModel.localEsp32Ip.collectAsState()
-    val esp32Status by viewModel.esp32Status.collectAsState()
+    val lastDiscoveredDevice by viewModel.lastDiscoveredDevice.collectAsState()
     val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
 
     LazyColumn(
@@ -37,7 +38,7 @@ fun SettingsScreen(
             SettingsSection(title = "Discovery & Conexión") {
                 DiscoverySection(
                     viewModel = viewModel,
-                    esp32Status = esp32Status
+                    discoveredDevice = lastDiscoveredDevice
                 )
             }
         }
@@ -108,7 +109,7 @@ fun SettingsSection(
 @Composable
 fun DiscoverySection(
     viewModel: MotorViewModel,
-    esp32Status: Map<String, Any?>?
+    discoveredDevice: DiscoveredDevice?
 ) {
     var isDiscovering by remember { mutableStateOf(false) }
 
@@ -165,16 +166,35 @@ fun DiscoverySection(
         }
 
         // Status info
-        if (esp32Status != null) {
+        if (discoveredDevice != null) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
             Text(
                 text = "Último dispositivo encontrado:",
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
-            InfoRow("IP AP", esp32Status["ap_ip"]?.toString() ?: "N/A")
-            InfoRow("IP WiFi", esp32Status["ip_address"]?.toString() ?: "N/A")
-            InfoRow("Nombre", esp32Status["device_name"]?.toString() ?: "N/A")
+            InfoRow("IP AP", discoveredDevice.apIp)
+            InfoRow("IP WiFi", discoveredDevice.wifiIp ?: "N/A")
+            InfoRow("Nombre", discoveredDevice.deviceName)
+
+            val canConnect = !discoveredDevice.wifiIp.isNullOrBlank()
+            Button(
+                onClick = { viewModel.connectToDiscoveredDevice(discoveredDevice) },
+                enabled = canConnect,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.Wifi, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Conectar WiFi (MQTT)")
+            }
+
+            if (!canConnect) {
+                Text(
+                    text = "El ESP32 aun no tiene IP WiFi. Configura WiFi antes de conectar.",
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
@@ -182,7 +202,7 @@ fun DiscoverySection(
 @Composable
 fun WiFiConfigSection(
     viewModel: MotorViewModel,
-    localIp: String
+    localIp: String?
 ) {
     var showConfigDialog by remember { mutableStateOf(false) }
     var ssid by remember { mutableStateOf("") }
@@ -207,7 +227,7 @@ fun WiFiConfigSection(
             Text("Configurar WiFi en ESP32")
         }
 
-        if (localIp.isNotBlank()) {
+        if (!localIp.isNullOrBlank()) {
             InfoRow("IP Local detectada", localIp)
         }
     }
@@ -278,10 +298,12 @@ fun WiFiConfigSection(
 @Composable
 fun BluetoothSection(
     viewModel: MotorViewModel,
-    connectionMode: String,
+    connectionMode: MotorViewModel.ConnectionMode,
     connectedAddress: String?
 ) {
     var showBluetoothDialog by remember { mutableStateOf(false) }
+    val isBluetoothMode = connectionMode == MotorViewModel.ConnectionMode.BLUETOOTH
+    val isBluetoothConnected = isBluetoothMode && connectedAddress != null
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -290,20 +312,20 @@ fun BluetoothSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = if (connectionMode == "bluetooth") "Conectado" else "Desconectado",
+                text = if (isBluetoothConnected) "Conectado" else "Desconectado",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = if (connectionMode == "bluetooth")
+                color = if (isBluetoothConnected)
                     Color(0xFF4CAF50)
                 else
                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
 
             Switch(
-                checked = connectionMode == "bluetooth",
+                checked = isBluetoothMode,
                 onCheckedChange = { enabled ->
                     if (enabled) {
-                        viewModel.switchConnectionMode("bluetooth")
+                        viewModel.switchConnectionMode(MotorViewModel.ConnectionMode.BLUETOOTH)
                         showBluetoothDialog = true
                     } else {
                         viewModel.disconnectBluetooth()
@@ -312,7 +334,7 @@ fun BluetoothSection(
             )
         }
 
-        if (connectionMode == "bluetooth" && connectedAddress != null) {
+        if (isBluetoothMode && connectedAddress != null) {
             InfoRow("Dispositivo", connectedAddress)
             Button(
                 onClick = { viewModel.disconnectBluetooth() },
@@ -323,7 +345,7 @@ fun BluetoothSection(
             ) {
                 Text("Desconectar")
             }
-        } else if (connectionMode == "bluetooth") {
+        } else if (isBluetoothMode) {
             Button(
                 onClick = { showBluetoothDialog = true },
                 modifier = Modifier.fillMaxWidth()
@@ -344,8 +366,13 @@ fun BluetoothSection(
 
 @Composable
 fun MqttSection(viewModel: MotorViewModel) {
-    val mqttConnected by viewModel.mqttConnected.collectAsState()
     val connectionMode by viewModel.connectionMode.collectAsState()
+    val connectedAddress by viewModel.connectedDeviceAddress.collectAsState()
+    val isMqttMode =
+        connectionMode == MotorViewModel.ConnectionMode.WIFI_LOCAL ||
+            connectionMode == MotorViewModel.ConnectionMode.MQTT_REMOTE ||
+            connectionMode == MotorViewModel.ConnectionMode.MQTT_TEST
+    val mqttConnected = isMqttMode && connectedAddress != null
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -364,10 +391,10 @@ fun MqttSection(viewModel: MotorViewModel) {
             )
 
             Switch(
-                checked = connectionMode == "wifi",
+                checked = isMqttMode,
                 onCheckedChange = { enabled ->
                     if (enabled) {
-                        viewModel.switchConnectionMode("wifi")
+                        viewModel.switchConnectionMode(MotorViewModel.ConnectionMode.WIFI_LOCAL)
                     } else {
                         viewModel.disconnectMqtt()
                     }

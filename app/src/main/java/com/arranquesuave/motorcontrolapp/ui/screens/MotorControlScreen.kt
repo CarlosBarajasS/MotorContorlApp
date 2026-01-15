@@ -44,9 +44,14 @@ fun MotorControlScreen(
     val canSendStop = motorRunning && !isStoppedMode
 
     // Connection status
-    val isBluetoothConnected = connectionMode == "bluetooth" && connectedAddress != null
-    val isWifiConnected = connectionMode == "wifi" && connectedAddress != null
-    val isMqttConnected by viewModel.mqttConnected.collectAsState()
+    val isBluetoothConnected =
+        connectionMode == MotorViewModel.ConnectionMode.BLUETOOTH && connectedAddress != null
+    val isNetworkMode =
+        connectionMode == MotorViewModel.ConnectionMode.WIFI_LOCAL ||
+            connectionMode == MotorViewModel.ConnectionMode.MQTT_REMOTE ||
+            connectionMode == MotorViewModel.ConnectionMode.MQTT_TEST
+    val isWifiConnected = isNetworkMode && connectedAddress != null
+    val isMqttConnected = isWifiConnected
     val deviceName = connectedAddress ?: "Desconectado"
 
     Box(modifier = Modifier.fillMaxSize()) {

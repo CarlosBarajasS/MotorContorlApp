@@ -10,6 +10,8 @@ import com.arranquesuave.motorcontrolapp.interfaces.MotorController
 import com.arranquesuave.motorcontrolapp.controllers.BluetoothMotorController
 import com.arranquesuave.motorcontrolapp.controllers.MqttMotorController
 import com.arranquesuave.motorcontrolapp.services.BluetoothService
+import com.arranquesuave.motorcontrolapp.services.DiscoveredDevice
+import com.arranquesuave.motorcontrolapp.services.DiscoveryService
 import com.arranquesuave.motorcontrolapp.services.MqttService
 import com.arranquesuave.motorcontrolapp.config.MqttConfig
 import com.arranquesuave.motorcontrolapp.network.RetrofitClient
@@ -63,6 +65,7 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     // ============================================
     private val bluetoothService = BluetoothService(application)
     private val mqttService = MqttService(application)
+    private val discoveryService = DiscoveryService(application)
     private val networkConfigManager = NetworkConfigManagerUpdated(application)
     private val esp32ConfigService = ESP32ConfigService(application)
     
@@ -114,6 +117,9 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _esp32Status = MutableStateFlow<ESP32Status?>(null)
     val esp32Status: StateFlow<ESP32Status?> = _esp32Status
+
+    private val _lastDiscoveredDevice = MutableStateFlow<DiscoveredDevice?>(null)
+    val lastDiscoveredDevice: StateFlow<DiscoveredDevice?> = _lastDiscoveredDevice
     
     private fun applyDeviceId(deviceId: String?) {
         if (deviceId != null) {
@@ -129,7 +135,17 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
         // ✅ INICIALIZAR MqttConfig CON CONTEXTO
         MqttConfig.init(application)
         mqttService.updateDeviceId(MqttConfig.getDeviceId())
-        
+
+        mqttService.setOnDeviceDiscovered { device ->
+            discoveryService.onMqttDeviceDiscovered(device)
+        }
+
+        viewModelScope.launch {
+            discoveryService.discoveredDevices.collectLatest { devices ->
+                _lastDiscoveredDevice.value = devices.lastOrNull()
+            }
+        }
+
         viewModelScope.launch {
             networkConfigManager.networkConfig.collectLatest { config ->
                 _localEsp32Ip.value = config.esp32IP
@@ -210,11 +226,11 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     // CAMBIAR MODO DE CONEXIÓN + SINCRONIZACIÓN CRÍTICA
     // ============================================
     fun switchConnectionMode(mode: ConnectionMode) {
+        _connectionMode.value = mode
         viewModelScope.launch {
             // Desconectar controlador actual
             currentController?.disconnect()
             
-            _connectionMode.value = mode
             _status.value = "Disconnected"
             _connectedDeviceAddress.value = null
             
@@ -294,6 +310,85 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
     // ============================================
     // CONECTAR SEGÚN EL MODO
     // ============================================
+    fun startMqttDiscovery() = viewModelScope.launch {
+        try {
+            if (!mqttService.isConnected()) {
+                val result = mqttService.connect(MqttConfig.MQTT_BROKER_URL)
+                if (result.isFailure) {
+                    _status.value = "MQTT discovery connect failed"
+                    return@launch
+                }
+            }
+            mqttService.subscribeToDiscovery()
+            _status.value = "MQTT discovery active"
+        } catch (e: Exception) {
+            _status.value = "MQTT discovery error: ${e.localizedMessage}"
+        }
+    }
+
+    fun startMdnsDiscovery() {
+        discoveryService.startMdnsDiscovery()
+    }
+
+    fun connectToDiscoveredDevice(device: DiscoveredDevice) = viewModelScope.launch {
+        applyDeviceId(device.deviceName)
+
+        val wifiIp = device.wifiIp?.takeIf { it.isNotBlank() }
+        if (wifiIp != null) {
+            networkConfigManager.saveNetworkConfig(wifiIp, MqttConfig.serverHost)
+            _localEsp32Ip.value = wifiIp
+        }
+
+        if (wifiIp == null) {
+            _status.value = "ESP32 sin WiFi. Configura la red antes de conectar."
+            return@launch
+        }
+
+        switchConnectionMode(ConnectionMode.WIFI_LOCAL)
+        connectMqtt()
+    }
+
+    fun scanNetworkRange(subnet: String = "192.168.1") {
+        discoveryService.startNetworkScan(subnet)
+    }
+
+    fun configureEsp32WiFi(
+        ssid: String,
+        password: String,
+        mqttBroker: String,
+        mqttPort: Int,
+        deviceName: String
+    ) = viewModelScope.launch {
+        _status.value = "Configuring ESP32..."
+        val broker = mqttBroker.trim().ifBlank { MqttConfig.serverHost }
+        val port = if (mqttPort > 0) mqttPort else MqttConfig.serverPort
+        val name = deviceName.trim().ifBlank { MqttConfig.DEFAULT_DEVICE_ID }
+        val result = esp32ConfigService.configureWiFi(
+            ssid = ssid.trim(),
+            password = password,
+            mqttBroker = broker,
+            mqttPort = port,
+            deviceName = name
+        )
+        _status.value = if (result.success) {
+            "ESP32 configured. Rebooting."
+        } else {
+            "ESP32 config failed: ${result.message}"
+        }
+    }
+
+    fun disconnectBluetooth() {
+        if (_connectionMode.value == ConnectionMode.BLUETOOTH) {
+            disconnectDevice()
+        }
+    }
+
+    fun disconnectMqtt() {
+        if (_connectionMode.value != ConnectionMode.BLUETOOTH) {
+            disconnectDevice()
+        }
+    }
+
     @SuppressLint("MissingPermission")
     fun connectDevice(device: BluetoothDevice) = viewModelScope.launch {
         _status.value = "Connecting to ${_connectionMode.value}..."
@@ -620,5 +715,6 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                 it.disconnect() 
             }
         }
+        discoveryService.cleanup()
     }
 }

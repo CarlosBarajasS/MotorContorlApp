@@ -46,10 +46,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        
-        <!-- ❌ SERVICIO MQTT ECLIPSE PAHO (REMOVIDO - Deprecated)
-        <service android:name="org.eclipse.paho.android.service.MqttService" />
-        -->
 
     </application>
 </manifest>

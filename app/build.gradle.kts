@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId             = "com.arranquesuave.motorcontrolapp"
-        minSdk                    = 21
+        minSdk                    = 23
         targetSdk                 = 35
         versionCode               = 1
         versionName               = "1.0"
@@ -132,7 +132,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
+    implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.compose.ui)
+
     // ❌ Eclipse Paho MQTT (Deprecated - causa crashes)
     // implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     // implementation("org.eclipse.paho:org.eclipse.paho.android.service:1.1.1")

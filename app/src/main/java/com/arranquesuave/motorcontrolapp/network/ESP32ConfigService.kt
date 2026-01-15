@@ -118,6 +118,43 @@ class ESP32ConfigService(private val context: Context) {
             }
         }
 
+    suspend fun configureWiFi(
+        ssid: String,
+        password: String,
+        mqttBroker: String,
+        mqttPort: Int,
+        deviceName: String
+    ): ESP32ConfigResponse = withContext(Dispatchers.IO) {
+        runCatching {
+            val brokerValue = mqttBroker.trim().ifBlank { MqttConfig.serverHost }
+            val portValue = if (mqttPort > 0) mqttPort else MqttConfig.serverPort
+            val deviceValue = deviceName.trim().ifBlank { MqttConfig.DEFAULT_DEVICE_ID }
+
+            val json = JSONObject().apply {
+                put("ssid", ssid)
+                put("password", password)
+                put("mqtt_broker", brokerValue)
+                put("mqtt_port", portValue)
+                put("device_name", deviceValue)
+            }
+
+            val request = Request.Builder()
+                .url("http://$ESP32_CONFIG_IP:$ESP32_PORT/configure")
+                .post(json.toString().toRequestBody(JSON_MEDIA_TYPE))
+                .build()
+
+            httpClient.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    ESP32ConfigResponse(true, "WiFi configurado exitosamente")
+                } else {
+                    ESP32ConfigResponse(false, "Error HTTP ${response.code}")
+                }
+            }
+        }.getOrElse { error ->
+            ESP32ConfigResponse(false, error.message ?: "Error configurando WiFi")
+        }
+    }
+
     suspend fun configureWiFi(ssid: String, password: String): ESP32ConfigResponse {
         return configureWiFi(WiFiCredentials(ssid, password))
     }
