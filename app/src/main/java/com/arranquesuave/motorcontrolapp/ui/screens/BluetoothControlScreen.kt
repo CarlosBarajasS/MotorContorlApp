@@ -1,6 +1,7 @@
 package com.arranquesuave.motorcontrolapp.ui.screens
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -50,6 +51,13 @@ fun BluetoothControlScreen(
     val status by viewModel.status.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     var selected by remember { mutableStateOf<String?>(null) }
+    val connectEnabled = selected != null && selected != connectedAddress
+    val onConnect: () -> Unit = {
+        val device = selected?.let { addr -> devices.find { it.address == addr } }
+        if (device != null) {
+            viewModel.connectDevice(device)
+        }
+    }
 
     LaunchedEffect(connectedAddress) {
         if (connectedAddress != null) selected = null
@@ -122,50 +130,16 @@ fun BluetoothControlScreen(
                     // Mostrar dispositivos encontrados durante el escaneo
                     if (devices.isNotEmpty()) {
                         Spacer(Modifier.height(16.dp))
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            items(devices) { dev ->
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { selected = dev.address }
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(12.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Filled.Bluetooth,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(dev.name ?: dev.address, style = MaterialTheme.typography.bodyLarge)
-                                        if (selected == dev.address) {
-                                            Spacer(Modifier.weight(1f))
-                                            Icon(Icons.Filled.Check, contentDescription = null)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Spacer(Modifier.height(24.dp))
-                        Button(
-                            onClick = {
-                                selected?.let { addr ->
-                                    viewModel.discoveredDevices.value.find { it.address == addr }
-                                        ?.let { viewModel.connectDevice(it) }
-                                }
-                            },
-                            enabled = selected != null && selected != connectedAddress,
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                        ) {
-                            Text("Conectar", color = MaterialTheme.colorScheme.onPrimary)
-                        }
+                        DeviceListSection(
+                            devices = devices,
+                            selected = selected,
+                            onSelect = { selected = it },
+                            onConnect = onConnect,
+                            connectEnabled = connectEnabled,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        )
                     }
                 }
 
@@ -193,52 +167,77 @@ fun BluetoothControlScreen(
                         Text("Buscar nuevamente", color = MaterialTheme.colorScheme.onPrimary)
                     }
                     Spacer(Modifier.height(16.dp))
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(devices) { dev ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { selected = dev.address }
-                                    .padding(horizontal = 16.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(12.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Bluetooth,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(dev.name ?: dev.address, style = MaterialTheme.typography.bodyLarge)
-                                    if (selected == dev.address) {
-                                        Spacer(Modifier.weight(1f))
-                                        Icon(Icons.Filled.Check, contentDescription = null)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(24.dp))
-                    Button(
-                        onClick = {
-                            selected?.let { addr ->
-                                viewModel.discoveredDevices.value.find { it.address == addr }
-                                    ?.let { viewModel.connectDevice(it) }
-                            }
-                        },
-                        enabled = selected != null && selected != connectedAddress,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    DeviceListSection(
+                        devices = devices,
+                        selected = selected,
+                        onSelect = { selected = it },
+                        onConnect = onConnect,
+                        connectEnabled = connectEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeviceListSection(
+    devices: List<BluetoothDevice>,
+    selected: String?,
+    onSelect: (String) -> Unit,
+    onConnect: () -> Unit,
+    connectEnabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 88.dp)
+        ) {
+            items(devices) { dev ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelect(dev.address) }
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(12.dp)
                     ) {
-                        Text("Conectar", color = MaterialTheme.colorScheme.onPrimary)
+                        Icon(
+                            Icons.Filled.Bluetooth,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(dev.name ?: dev.address, style = MaterialTheme.typography.bodyLarge)
+                        if (selected == dev.address) {
+                            Spacer(Modifier.weight(1f))
+                            Icon(Icons.Filled.Check, contentDescription = null)
+                        }
                     }
                 }
             }
+        }
+        Button(
+            onClick = onConnect,
+            enabled = connectEnabled,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+        ) {
+            Text("Conectar", color = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
