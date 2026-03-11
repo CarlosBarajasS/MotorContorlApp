@@ -1,15 +1,15 @@
-package com.arranquesuave.motorcontrolapp.viewmodel
+package com.arranquesuave.motorcontrolapp.auth.viewmodel
 
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.ViewModel
-import com.arranquesuave.motorcontrolapp.data.AuthRepository
-import com.arranquesuave.motorcontrolapp.network.model.AuthResponse
+import androidx.lifecycle.viewModelScope
+import com.arranquesuave.motorcontrolapp.auth.data.AuthRepository
+import com.arranquesuave.motorcontrolapp.auth.model.AuthResponse
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import retrofit2.Response
 
 class AuthViewModel(private val repo: AuthRepository = AuthRepository()) : ViewModel() {
-    val signupState = MutableStateFlow<Result<Response<Void>>?>(null)
+    val signupState = MutableStateFlow<Result<AuthResponse>?>(null)
     val loginState  = MutableStateFlow<Result<AuthResponse>?>(null)
     val logoutState = MutableStateFlow<Result<Response<Void>>?>(null)
 

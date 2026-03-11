@@ -1,4 +1,4 @@
-package com.arranquesuave.motorcontrolapp.utils
+package com.arranquesuave.motorcontrolapp.auth.data
 
 import android.content.Context
 

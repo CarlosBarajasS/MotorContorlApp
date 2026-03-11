@@ -1,5 +1,5 @@
-// app/src/main/java/com/arranquesuave/motorcontrolapp/ui/screens/SignUpScreen.kt
-package com.arranquesuave.motorcontrolapp.ui.screens
+// app/src/main/java/com/arranquesuave/motorcontrolapp/auth/ui/SignUpScreen.kt
+package com.arranquesuave.motorcontrolapp.auth.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*

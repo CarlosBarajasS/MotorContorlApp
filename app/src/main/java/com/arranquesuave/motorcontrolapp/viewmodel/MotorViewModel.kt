@@ -402,21 +402,21 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                     // ✅ USAR BROKER DEL PROFESOR
                     MqttMotorController(
                         mqttService, 
-                        RetrofitClient.authApi,
+                        RetrofitClient.motorApi,
                         MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_REMOTE -> {
                     MqttMotorController(
                         mqttService,
-                        RetrofitClient.authApi, 
+                        RetrofitClient.motorApi, 
                         MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_TEST -> {
                     MqttMotorController(
                         mqttService,
-                        RetrofitClient.authApi, 
+                        RetrofitClient.motorApi, 
                         MqttConfig.MQTT_TEST_URL
                     )
                 }
@@ -464,21 +464,21 @@ class MotorViewModel(application: Application) : AndroidViewModel(application) {
                     // ✅ USAR BROKER DEL PROFESOR
                     MqttMotorController(
                         mqttService, 
-                        RetrofitClient.authApi,
+                        RetrofitClient.motorApi,
                         MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_REMOTE -> {
                     MqttMotorController(
                         mqttService,
-                        RetrofitClient.authApi,
+                        RetrofitClient.motorApi,
                         MqttConfig.MQTT_BROKER_URL
                     )
                 }
                 ConnectionMode.MQTT_TEST -> {
                     MqttMotorController(
                         mqttService,
-                        RetrofitClient.authApi,
+                        RetrofitClient.motorApi,
                         MqttConfig.MQTT_TEST_URL
                     )
                 }

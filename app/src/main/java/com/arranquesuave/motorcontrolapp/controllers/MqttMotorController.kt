@@ -3,7 +3,7 @@ package com.arranquesuave.motorcontrolapp.controllers
 import android.util.Log
 import com.arranquesuave.motorcontrolapp.interfaces.MotorController
 import com.arranquesuave.motorcontrolapp.services.MqttService
-import com.arranquesuave.motorcontrolapp.network.AuthApi
+import com.arranquesuave.motorcontrolapp.network.MotorApi
 import com.arranquesuave.motorcontrolapp.network.model.MotorCommand
 
 /**
@@ -15,7 +15,7 @@ import com.arranquesuave.motorcontrolapp.network.model.MotorCommand
  */
 class MqttMotorController(
     private val mqttService: MqttService,
-    private val authApi: AuthApi,
+    private val motorApi: MotorApi,
     private val serverUri: String
 ) : MotorController {
     
@@ -100,7 +100,7 @@ class MqttMotorController(
             // Opción 2: Envío vía API REST (más confiable, con autenticación)
             try {
                 val command = MotorCommand("arranque6p", values)
-                val response = authApi.sendMotorCommand(command)
+                val response = motorApi.sendMotorCommand(command)
                 
                 if (response.isSuccessful) {
                     Log.d(TAG, "API command sent successfully")
@@ -133,7 +133,7 @@ class MqttMotorController(
             // Opcional: Envío vía API REST
             try {
                 val command = MotorCommand("continuo", emptyList())
-                authApi.sendMotorCommand(command)
+                motorApi.sendMotorCommand(command)
             } catch (apiException: Exception) {
                 Log.w(TAG, "API call failed for continuo", apiException)
             }
@@ -159,7 +159,7 @@ class MqttMotorController(
             // También vía API REST para logging
             try {
                 val command = MotorCommand("paro", emptyList())
-                authApi.sendMotorCommand(command)
+                motorApi.sendMotorCommand(command)
             } catch (apiException: Exception) {
                 Log.w(TAG, "API call failed for paro", apiException)
             }

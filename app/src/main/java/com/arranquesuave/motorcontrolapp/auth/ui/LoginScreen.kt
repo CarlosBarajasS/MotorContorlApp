@@ -1,4 +1,4 @@
-package com.arranquesuave.motorcontrolapp.ui.screens
+package com.arranquesuave.motorcontrolapp.auth.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

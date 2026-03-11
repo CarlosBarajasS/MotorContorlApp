@@ -18,7 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.arranquesuave.motorcontrolapp.viewmodel.AuthViewModel
+import com.arranquesuave.motorcontrolapp.auth.viewmodel.AuthViewModel
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -26,15 +26,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.navigation.compose.composable
-import com.arranquesuave.motorcontrolapp.ui.screens.LoginScreen
-import com.arranquesuave.motorcontrolapp.ui.screens.SignUpScreen
+import com.arranquesuave.motorcontrolapp.auth.ui.LoginScreen
+import com.arranquesuave.motorcontrolapp.auth.ui.SignUpScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.BluetoothControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.MotorControlScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.StatsScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.SettingsScreen
 import com.arranquesuave.motorcontrolapp.ui.screens.WiFiSetupScreenReal
 import com.arranquesuave.motorcontrolapp.viewmodel.MotorViewModel
-import com.arranquesuave.motorcontrolapp.utils.SessionManager
+import com.arranquesuave.motorcontrolapp.auth.data.SessionManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -79,8 +79,6 @@ class MainActivity : ComponentActivity() {
                     // 2) Configuración de autenticación y navegación usando AuthViewModel
         
                             val authViewModel: AuthViewModel = viewModel()
-                            var signupEmail by remember { mutableStateOf("") }
-                            var signupPassword by remember { mutableStateOf("") }
 val loginResult by authViewModel.loginState.collectAsState(initial = authViewModel.loginState.value)
 val signupResult by authViewModel.signupState.collectAsState(initial = authViewModel.signupState.value)
         
@@ -132,41 +130,21 @@ val signupResult by authViewModel.signupState.collectAsState(initial = authViewM
                         composable("signup") {
                             SignUpScreen(
                                 onSignUp = { email, password, confirm ->
-                                    signupEmail = email
-                                    signupPassword = password
                                     authViewModel.signup(email, password, confirm)
                                 },
-                                onNavigateToLogin = {
-                                    navController.popBackStack()
-                                }
+                                onNavigateToLogin = { navController.popBackStack() }
                             )
                             LaunchedEffect(signupResult) {
                                 signupResult?.onSuccess { response ->
-                                    if (response.isSuccessful) {
-                                        authViewModel.login(signupEmail, signupPassword)
-                                        Toast.makeText(context, "Registro exitoso", Toast.LENGTH_SHORT).show()
-                                        authViewModel.signupState.value = null
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Error: La contraseña debe tener al menos 8 caracteres",
-                                            Toast.LENGTH_LONG
-                                        ).show()
-                                        authViewModel.signupState.value = null
-                                    }
-                                }
-                                signupResult?.onFailure { error ->
-                                    Toast.makeText(context, "Error: ${error.message}", Toast.LENGTH_LONG).show()
-                                    authViewModel.signupState.value = null
-                                }
-                            }
-                            LaunchedEffect(loginResult) {
-                                loginResult?.onSuccess { response ->
                                     sessionManager.saveToken(response.token)
                                     navController.navigate("main") {
                                         popUpTo("signup") { inclusive = true }
                                     }
-                                    authViewModel.loginState.value = null
+                                    authViewModel.signupState.value = null
+                                }
+                                signupResult?.onFailure { error ->
+                                    Toast.makeText(context, "Error al registrarse. Intenta de nuevo.", Toast.LENGTH_LONG).show()
+                                    authViewModel.signupState.value = null
                                 }
                             }
                         }
