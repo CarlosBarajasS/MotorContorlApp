@@ -7,8 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -30,8 +28,7 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MotorControlScreen(
-    viewModel: MotorViewModel,
-    onLogout: () -> Unit
+    viewModel: MotorViewModel
 ) {
     val sliderStates = viewModel.sliders.map { it.collectAsState() }
     val motorRunning by viewModel.motorRunning.collectAsState()
@@ -75,11 +72,7 @@ fun MotorControlScreen(
             topBar = {
                 TopAppBar(
                     title = { Text("Control de Motor", fontSize = 20.sp) },
-                    actions = {
-                        IconButton(onClick = onLogout) {
-                            Icon(Icons.Filled.ExitToApp, contentDescription = "Logout")
-                        }
-                    }
+                    actions = {}
                 )
             }
         ) { inner ->

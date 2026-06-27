@@ -304,6 +304,8 @@ fun BluetoothSection(
     var showBluetoothDialog by remember { mutableStateOf(false) }
     val isBluetoothMode = connectionMode == MotorViewModel.ConnectionMode.BLUETOOTH
     val isBluetoothConnected = isBluetoothMode && connectedAddress != null
+    val devices by viewModel.discoveredDevices.collectAsState()
+    val isScanning by viewModel.isScanning.collectAsState()
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -326,6 +328,7 @@ fun BluetoothSection(
                 onCheckedChange = { enabled ->
                     if (enabled) {
                         viewModel.switchConnectionMode(MotorViewModel.ConnectionMode.BLUETOOTH)
+                        viewModel.startDiscovery()
                         showBluetoothDialog = true
                     } else {
                         viewModel.disconnectBluetooth()
@@ -347,7 +350,10 @@ fun BluetoothSection(
             }
         } else if (isBluetoothMode) {
             Button(
-                onClick = { showBluetoothDialog = true },
+                onClick = {
+                    viewModel.startDiscovery()
+                    showBluetoothDialog = true
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.Bluetooth, contentDescription = null)
@@ -358,9 +364,18 @@ fun BluetoothSection(
     }
 
     if (showBluetoothDialog) {
-        // TODO: Implement Bluetooth discovery dialog
-        // For now, just navigate to existing Bluetooth screen
-        showBluetoothDialog = false
+        BluetoothDeviceDialog(
+            devices = devices,
+            scanning = isScanning,
+            onSelect = { device ->
+                showBluetoothDialog = false
+                viewModel.connectDevice(device)
+            },
+            onDismiss = { showBluetoothDialog = false },
+            onScanAgain = {
+                viewModel.startDiscovery()
+            }
+        )
     }
 }
 
